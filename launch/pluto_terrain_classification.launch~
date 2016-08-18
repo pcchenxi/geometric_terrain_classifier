@@ -1,0 +1,14 @@
+<!-- -->
+<launch>
+
+  <node pkg="terrain_classifier" type="pluto_terrain_classification" name="pluto_terrain_classification" output="screen">
+    <!--param name="range" value="$(arg range)" / -->
+    <param name="cell_size" value="0.2" />
+    <param name="localscan_buff_size" value="30" />
+    <param name="target_frame" value="map" />
+
+    <remap from="/points_raw" to="/velodyne_points" />
+    <remap from="/image_raw" to="/kinect2/qhd/image_color" />
+  </node>
+  
+</launch>
