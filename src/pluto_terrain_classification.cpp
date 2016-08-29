@@ -6,6 +6,7 @@
 #include "pointshape_processor.h"
 #include "cloud_image_mapper.h"
 #include "local_scan_buffer.h"
+#include "feature_fuser.h"
 
 tf::TransformListener* tfListener = NULL;
 bool cloud_ready = false;
@@ -17,6 +18,7 @@ image_transport::Publisher pub_img;
 Pointshape_Processor *ps_processor;
 Cloud_Image_Mapper   *ci_mapper;
 Local_Scan_Buffer    *local_buff;
+Feature_Fuser        *feature_fuser;
 
 pcl::PointCloud<pcl::PointXYZRGB> velodyne_cloud;
 
@@ -72,10 +74,15 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
     if(!cloud_ready)
         return;
 
-    float *vision_label;
-    pcl::PointCloud<pcl::PointXYZRGB> mapped_cloud = ci_mapper->cloud_image_mapping(image_msg, info_msg, velodyne_cloud, vision_label);
+    // float *vision_label;
+    pcl::PointCloud<pcl::PointXYZRGB> mapped_cloud = ci_mapper->cloud_image_mapping(image_msg, info_msg, velodyne_cloud);
+
+    // feature_fuser->fusing(vision_label, ps_processor->cloud_feature, mapped_cloud.points.size());
+    // mapped_cloud = feature_fuser->color_cloud_by_cost(mapped_cloud, ps_processor->cloud_feature);
     // cout << mapped_cloud.header.frame_id << endl;
     publish(pub_out, mapped_cloud);
+
+
 //   try
 //   {
 //     cv::imshow("view", cv_bridge::toCvShare(msg, "bgr8")->image);
@@ -86,7 +93,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
 //     ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
 //   }
 
- 
+    // delete [] vision_label;
 }
 
 void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
@@ -118,9 +125,10 @@ void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     // publish(pub_out, local_cloud);
 
 
+
     // velodyne_cloud = local_buff->convert_to_pcl(*cloud_in);
     velodyne_cloud = local_cloud;
-    cloud_ready = true;
+    cloud_ready = true; 
 
 
 }
@@ -140,9 +148,10 @@ int main(int argc, char** argv)
     node.getParam("/localscan_buff_size", localscan_buff_size);
     // node.getParam("/target_frame", target_frame);
 
-    ps_processor = new Pointshape_Processor(360*4, cell_size);
-    ci_mapper    = new Cloud_Image_Mapper(tfListener);
-    local_buff   = new Local_Scan_Buffer(localscan_buff_size, target_frame);
+    ps_processor    = new Pointshape_Processor(360*4, cell_size);
+    ci_mapper       = new Cloud_Image_Mapper(tfListener);
+    local_buff      = new Local_Scan_Buffer(localscan_buff_size, target_frame);
+    feature_fuser   = new Feature_Fuser();
 
     pub_out = node.advertise<sensor_msgs::PointCloud2>("/ground_obstacle",1);
 
