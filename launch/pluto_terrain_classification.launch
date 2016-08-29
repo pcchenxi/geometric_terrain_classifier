@@ -8,7 +8,7 @@
     <param name="target_frame" value="map" />
 
     <remap from="/points_raw" to="/velodyne_points" />
-    <remap from="/image_raw" to="/kinect2/qhd/image_color" />
+    <remap from="/image_raw" to="/kinect2/qhd/image_color_" />
   </node>
   
 </launch>

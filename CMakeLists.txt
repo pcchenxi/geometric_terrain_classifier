@@ -28,8 +28,8 @@ catkin_package(
 )
 
 include_directories(
-  /home/xi/catkin_rcv/src/terrain_feature/terrain/src
-  /home/xi/catkin_rcv/src/cloud_img_mapper/src
+  /home/xi/workspace/catkin_rcv/src/terrain_feature/terrain/src
+  /home/xi/workspace/catkin_rcv/src/cloud_img_mapper/src
 
   ${OpenCV_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}

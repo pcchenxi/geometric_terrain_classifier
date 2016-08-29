@@ -80,7 +80,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
     // feature_fuser->fusing(vision_label, ps_processor->cloud_feature, mapped_cloud.points.size());
     // mapped_cloud = feature_fuser->color_cloud_by_cost(mapped_cloud, ps_processor->cloud_feature);
     // cout << mapped_cloud.header.frame_id << endl;
-    publish(pub_out, mapped_cloud);
+    // publish(pub_out, mapped_cloud);
 
 
 //   try
@@ -98,6 +98,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
 
 void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
+    cout << "in velodyne call back" << endl;
     tf::StampedTransform to_target;
     try {
         tfListener->lookupTransform(target_frame, "base_link", ros::Time(0), to_target);
@@ -106,23 +107,23 @@ void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
         return;
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_base = ps_processor->process_velodyne(cloud_in, tfListener);
+    pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_map = ps_processor->process_velodyne(cloud_in, tfListener);
     // velodyne_cloud = filtered_velodyne_base;
     // cloud_ready = true;
     // cout << filtered_velodyne_base.header.frame_id << endl;
 
-    /////////////////////// transfer filtered cloud from base_link to map frame ////////////////////
-    pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_map;
-    Eigen::Matrix4f eigen_transform_target;
-    pcl_ros::transformAsMatrix (to_target, eigen_transform_target);
-    pcl::transformPointCloud(filtered_velodyne_base, filtered_velodyne_map, eigen_transform_target);
-    filtered_velodyne_map.header.frame_id = target_frame;
-    // cout << filtered_velodyne_map.header.frame_id << endl;
+    // /////////////////////// transfer filtered cloud from base_link to map frame ////////////////////
+    // pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_map;
+    // Eigen::Matrix4f eigen_transform_target;
+    // pcl_ros::transformAsMatrix (to_target, eigen_transform_target);
+    // pcl::transformPointCloud(filtered_velodyne_base, filtered_velodyne_map, eigen_transform_target);
+    // // filtered_velodyne_map.header.frame_id = target_frame;
+    // // cout << filtered_velodyne_map.header.frame_id << endl;
 
     /////////////////////// get local scans from buffer /////////////////////////////
     local_buff->add_scan(filtered_velodyne_map);
     pcl::PointCloud<pcl::PointXYZRGB> local_cloud = local_buff->get_local_scans();
-    // publish(pub_out, local_cloud);
+    publish(pub_out, local_cloud);
 
 
 
@@ -156,7 +157,7 @@ int main(int argc, char** argv)
     pub_out = node.advertise<sensor_msgs::PointCloud2>("/ground_obstacle",1);
 
     ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/points_raw", 1, callback_velodyne);
-    // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_velodyne);
+    
     image_transport::ImageTransport it(node);
     // image_transport::Subscriber sub = it.subscribe("image_raw", 1, imageCallback);
 
