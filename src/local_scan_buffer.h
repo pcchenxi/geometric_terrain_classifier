@@ -13,8 +13,8 @@ class Local_Scan_Buffer
       string buff_frame_;
       std::vector<pcl::PointCloud<pcl::PointXYZRGB> > local_buffer_; 
 
-      void add_scan(pcl::PointCloud<pcl::PointXYZRGB> new_scan);
-      void add_scan(sensor_msgs::PointCloud2 new_scan);
+      bool add_scan(pcl::PointCloud<pcl::PointXYZRGB> new_scan);
+      bool add_scan(sensor_msgs::PointCloud2 new_scan);
       pcl::PointCloud<pcl::PointXYZRGB> get_local_scans();
       pcl::PointCloud<pcl::PointXYZRGB> convert_to_pcl(sensor_msgs::PointCloud2 cloud);
 };
@@ -28,18 +28,20 @@ Local_Scan_Buffer::Local_Scan_Buffer(int buffer_size, string buff_frame)
     local_buffer_.resize(buffer_size_);
 }
 
-void Local_Scan_Buffer::add_scan(pcl::PointCloud<pcl::PointXYZRGB> new_scan)
+bool Local_Scan_Buffer::add_scan(pcl::PointCloud<pcl::PointXYZRGB> new_scan)
 {
     if(new_scan.header.frame_id != buff_frame_)
     {
-        cout << "frame does not match with privious cloud frame !!!!" << endl;
-        return;
+        cout << "frame does not match with privious cloud frame !!!!" << buff_frame_ << endl;
+        return false;
     }
     current_index_      ++;  
     if(current_index_ == buffer_size_)
         current_index_  = 0;
 
     local_buffer_[current_index_] = new_scan;
+
+    return true;
 }
 
 pcl::PointCloud<pcl::PointXYZRGB> Local_Scan_Buffer::convert_to_pcl(sensor_msgs::PointCloud2 cloud)
@@ -54,12 +56,12 @@ pcl::PointCloud<pcl::PointXYZRGB> Local_Scan_Buffer::convert_to_pcl(sensor_msgs:
     return pcl_cloud;
 }
 
-void Local_Scan_Buffer::add_scan(sensor_msgs::PointCloud2 new_scan)
+bool Local_Scan_Buffer::add_scan(sensor_msgs::PointCloud2 new_scan)
 {    
     if(new_scan.header.frame_id != buff_frame_)
     {
         cout << "frame does not match with privious cloud frame !!!!" << endl;
-        return;
+        return false;
     }
 
     pcl::PointCloud<pcl::PointXYZRGB> pcl_scan = convert_to_pcl (new_scan);
@@ -69,6 +71,7 @@ void Local_Scan_Buffer::add_scan(sensor_msgs::PointCloud2 new_scan)
         current_index_  = 0;
 
     local_buffer_[current_index_] = pcl_scan;
+    return true;
 }
 
 pcl::PointCloud<pcl::PointXYZRGB> Local_Scan_Buffer::get_local_scans()

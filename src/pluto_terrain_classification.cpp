@@ -10,14 +10,14 @@
 
 tf::TransformListener* tfListener = NULL;
 bool cloud_ready = false;
-string target_frame = "map";
+string target_frame = "world_corrected";
 
-ros::Publisher  pub_out;
-image_transport::Publisher pub_img;
+ros::Publisher  pub_path_roughness, pub_color, pub_height, pub_roughness;
+image_transport::Publisher pub_img_color, pub_img_grey;
 
 Pointshape_Processor *ps_processor;
 Cloud_Image_Mapper   *ci_mapper;
-Local_Scan_Buffer    *local_buff;
+Local_Scan_Buffer    *local_buff_height, *local_buff_cost;
 Feature_Fuser        *feature_fuser;
 
 pcl::PointCloud<pcl::PointXYZRGB> velodyne_cloud;
@@ -75,12 +75,33 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
         return;
 
     // float *vision_label;
-    pcl::PointCloud<pcl::PointXYZRGB> mapped_cloud = ci_mapper->cloud_image_mapping(image_msg, info_msg, velodyne_cloud);
+    pcl::PointCloud<pcl::PointXYZRGB> colored_cloud = ci_mapper->cloud_image_mapping(image_msg, info_msg, velodyne_cloud);
 
-    // feature_fuser->fusing(vision_label, ps_processor->cloud_feature, mapped_cloud.points.size());
-    // mapped_cloud = feature_fuser->color_cloud_by_cost(mapped_cloud, ps_processor->cloud_feature);
-    // cout << mapped_cloud.header.frame_id << endl;
-    // publish(pub_out, mapped_cloud);
+    sensor_msgs::ImagePtr msg_color = cv_bridge::CvImage(std_msgs::Header(), "bgr8", ci_mapper->img_label_color_).toImageMsg();
+    sensor_msgs::ImagePtr msg_grey  = cv_bridge::CvImage(std_msgs::Header(), "mono8", ci_mapper->img_label_grey_).toImageMsg();
+
+    pub_img_color.publish(msg_color);
+    pub_img_grey.publish(msg_grey);
+
+    // /////////////////////// get local scans from buffer /////////////////////////////
+    // cout << "adding height, frame id: " << colored_cloud.header.frame_id;
+    // local_buff_height->add_scan(colored_cloud);
+    // cout << " adding cost, frame id: " << ps_processor->velodyne_cost.header.frame_id;
+    // local_buff_cost->add_scan(ps_processor->velodyne_cost);
+
+    // pcl::PointCloud<pcl::PointXYZRGB> local_cloud_height = local_buff_height->get_local_scans();
+    // pcl::PointCloud<pcl::PointXYZRGB> local_cloud_cost   = local_buff_cost->get_local_scans();
+
+
+    // publish(pub_height, local_cloud_height);
+    // publish(pub_path_roughness, ps_processor->frontp_roughness);
+    // publish(pub_roughness, local_cloud_cost);
+
+
+    // feature_fuser->fusing(vision_label, ps_processor->cloud_feature, colored_cloud.points.size());
+    // colored_cloud = feature_fuser->color_cloud_by_cost(colored_cloud, ps_processor->cloud_feature);
+    // cout << colored_cloud.header.frame_id << endl;
+    // publish(pub_color, colored_cloud);
 
 
 //   try
@@ -108,27 +129,26 @@ void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     }
 
     pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_map = ps_processor->process_velodyne(cloud_in, tfListener);
-    // velodyne_cloud = filtered_velodyne_base;
-    // cloud_ready = true;
-    // cout << filtered_velodyne_base.header.frame_id << endl;
-
-    // /////////////////////// transfer filtered cloud from base_link to map frame ////////////////////
-    // pcl::PointCloud<pcl::PointXYZRGB> filtered_velodyne_map;
-    // Eigen::Matrix4f eigen_transform_target;
-    // pcl_ros::transformAsMatrix (to_target, eigen_transform_target);
-    // pcl::transformPointCloud(filtered_velodyne_base, filtered_velodyne_map, eigen_transform_target);
-    // // filtered_velodyne_map.header.frame_id = target_frame;
-    // // cout << filtered_velodyne_map.header.frame_id << endl;
 
     /////////////////////// get local scans from buffer /////////////////////////////
-    local_buff->add_scan(filtered_velodyne_map);
-    pcl::PointCloud<pcl::PointXYZRGB> local_cloud = local_buff->get_local_scans();
-    publish(pub_out, local_cloud);
+    cout << "adding height, frame id: " << filtered_velodyne_map.header.frame_id;
+    if (!local_buff_height->add_scan(filtered_velodyne_map))
+        return;
+
+    cout << " adding cost, frame id: " << ps_processor->velodyne_cost.header.frame_id;
+    if(!local_buff_cost->add_scan(ps_processor->velodyne_cost))
+        return;
+
+    pcl::PointCloud<pcl::PointXYZRGB> local_cloud_height = local_buff_height->get_local_scans();
+    pcl::PointCloud<pcl::PointXYZRGB> local_cloud_cost   = local_buff_cost->get_local_scans();
 
 
+    publish(pub_height, local_cloud_height);
+    publish(pub_path_roughness, ps_processor->frontp_roughness);
+    publish(pub_roughness, local_cloud_cost);
 
-    // velodyne_cloud = local_buff->convert_to_pcl(*cloud_in);
-    velodyne_cloud = local_cloud;
+
+    velodyne_cloud = local_cloud_height;
     cloud_ready = true; 
 
 
@@ -143,27 +163,34 @@ int main(int argc, char** argv)
 
 
     float cell_size = 0.2;
-    int localscan_buff_size = 30;
+    int localscan_buff_size = 20;
     // string target_frame;
     node.getParam("/cell_size", cell_size);
     node.getParam("/localscan_buff_size", localscan_buff_size);
     // node.getParam("/target_frame", target_frame);
 
-    ps_processor    = new Pointshape_Processor(360*4, cell_size);
-    ci_mapper       = new Cloud_Image_Mapper(tfListener);
-    local_buff      = new Local_Scan_Buffer(localscan_buff_size, target_frame);
-    feature_fuser   = new Feature_Fuser();
+    ps_processor        = new Pointshape_Processor(360*4, cell_size);
+    ci_mapper           = new Cloud_Image_Mapper(tfListener);
+    local_buff_height   = new Local_Scan_Buffer(localscan_buff_size, target_frame);
+    local_buff_cost     = new Local_Scan_Buffer(localscan_buff_size, target_frame);
+    feature_fuser       = new Feature_Fuser();
 
-    pub_out = node.advertise<sensor_msgs::PointCloud2>("/ground_obstacle",1);
+    // pub_out         = node.advertise<sensor_msgs::PointCloud2>("/ground_obstacle",1);
+    pub_path_roughness  = node.advertise<sensor_msgs::PointCloud2>("/velodyne_path_roughness",1);
+    pub_roughness       = node.advertise<sensor_msgs::PointCloud2>("/velodyne_roughness",1);
+    pub_height          = node.advertise<sensor_msgs::PointCloud2>("/velodyne_height",1);
+    // pub_color           = node.advertise<sensor_msgs::PointCloud2>("/velodyne_colored",1);
 
     ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/points_raw", 1, callback_velodyne);
+    //image_transport::Publisher pub = it.advertise("camera/image", 1);
     
     image_transport::ImageTransport it(node);
     // image_transport::Subscriber sub = it.subscribe("image_raw", 1, imageCallback);
 
     image_transport::CameraSubscriber sub_camera;
     sub_camera = it.subscribeCamera("image_raw", 1, imageCallback);
-    pub_img = it.advertise("image_out", 1);
+    pub_img_color  = it.advertise("geometry_color", 1);
+    pub_img_grey   = it.advertise("geometry_grey", 1);
     ros::spin();
 
     return 0;
