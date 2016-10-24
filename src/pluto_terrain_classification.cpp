@@ -8,6 +8,7 @@
 #include "local_scan_buffer.h"
 #include "feature_fuser.h"
 
+
 tf::TransformListener* tfListener = NULL;
 bool cloud_ready = false;
 string target_frame = "world_corrected";
@@ -169,7 +170,7 @@ int main(int argc, char** argv)
     node.getParam("/localscan_buff_size", localscan_buff_size);
     // node.getParam("/target_frame", target_frame);
 
-    ps_processor        = new Pointshape_Processor(360*4, cell_size);
+    ps_processor        = new Pointshape_Processor(360*4, cell_size, target_frame);
     ci_mapper           = new Cloud_Image_Mapper(tfListener);
     local_buff_height   = new Local_Scan_Buffer(localscan_buff_size, target_frame);
     local_buff_cost     = new Local_Scan_Buffer(localscan_buff_size, target_frame);

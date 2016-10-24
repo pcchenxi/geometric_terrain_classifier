@@ -32,7 +32,7 @@ bool Local_Scan_Buffer::add_scan(pcl::PointCloud<pcl::PointXYZRGB> new_scan)
 {
     if(new_scan.header.frame_id != buff_frame_)
     {
-        cout << "frame does not match with privious cloud frame !!!!" << buff_frame_ << endl;
+        cout << "frame does not match with privious cloud frame !!!!" << buff_frame_ << "  " << new_scan.header.frame_id << endl;
         return false;
     }
     current_index_      ++;  

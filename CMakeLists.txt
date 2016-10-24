@@ -44,9 +44,17 @@ link_directories(
 add_definitions(${PCL_DEFINITIONS})
 
 add_executable(pluto_terrain_classification src/pluto_terrain_classification.cpp)
+add_executable(geometric_classifier src/geometric_classification/geometric_terrain_classifier.cpp)
 
 target_link_libraries(pluto_terrain_classification
   ${OpenCV_LIBRARIES}
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
+
+target_link_libraries(geometric_classifier
+  ${OpenCV_LIBRARIES}
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
+
