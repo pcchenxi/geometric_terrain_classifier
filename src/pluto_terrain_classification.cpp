@@ -7,7 +7,7 @@
 #include "cloud_image_mapper.h"
 #include "local_scan_buffer.h"
 #include "feature_fuser.h"
-
+// #include "geometric_classification/cloud_matrix_loador.h"
 
 tf::TransformListener* tfListener = NULL;
 bool cloud_ready = false;
@@ -76,49 +76,19 @@ void imageCallback(const sensor_msgs::ImageConstPtr& image_msg,
         return;
 
     // float *vision_label;
+    cout << "start mapping cloud and image" << endl;
     pcl::PointCloud<pcl::PointXYZRGB> colored_cloud = ci_mapper->cloud_image_mapping(image_msg, info_msg, velodyne_cloud);
 
     sensor_msgs::ImagePtr msg_color = cv_bridge::CvImage(std_msgs::Header(), "bgr8", ci_mapper->img_label_color_).toImageMsg();
     sensor_msgs::ImagePtr msg_grey  = cv_bridge::CvImage(std_msgs::Header(), "mono8", ci_mapper->img_label_grey_).toImageMsg();
 
-    pub_img_color.publish(msg_color);
-    pub_img_grey.publish(msg_grey);
+    // pub_img_color.publish(msg_color);
+    // pub_img_grey.publish(msg_grey);
+    cloud_ready = false;
 
-    // /////////////////////// get local scans from buffer /////////////////////////////
-    // cout << "adding height, frame id: " << colored_cloud.header.frame_id;
-    // local_buff_height->add_scan(colored_cloud);
-    // cout << " adding cost, frame id: " << ps_processor->velodyne_cost.header.frame_id;
-    // local_buff_cost->add_scan(ps_processor->velodyne_cost);
-
-    // pcl::PointCloud<pcl::PointXYZRGB> local_cloud_height = local_buff_height->get_local_scans();
-    // pcl::PointCloud<pcl::PointXYZRGB> local_cloud_cost   = local_buff_cost->get_local_scans();
-
-
-    // publish(pub_height, local_cloud_height);
-    // publish(pub_path_roughness, ps_processor->frontp_roughness);
-    // publish(pub_roughness, local_cloud_cost);
-
-
-    // feature_fuser->fusing(vision_label, ps_processor->cloud_feature, colored_cloud.points.size());
-    // colored_cloud = feature_fuser->color_cloud_by_cost(colored_cloud, ps_processor->cloud_feature);
-    // cout << colored_cloud.header.frame_id << endl;
-    // publish(pub_color, colored_cloud);
-
-
-//   try
-//   {
-//     cv::imshow("view", cv_bridge::toCvShare(msg, "bgr8")->image);
-//     cv::waitKey(30);
-//   }
-//   catch (cv_bridge::Exception& e)
-//   {
-//     ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
-//   }
-
-    // delete [] vision_label;
 }
 
-void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
+void process_single_scan(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
     cout << "in velodyne call back" << endl;
     tf::StampedTransform to_target;
@@ -151,7 +121,23 @@ void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     velodyne_cloud = local_cloud_height;
     cloud_ready = true; 
+}
 
+void process_registered_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
+{
+    cout << "cloud recieved" << endl;
+    // sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, "world_corrected");
+    pcl::PointCloud<pcl::PointXYZRGB> pcl_cloud;
+    pcl::fromROSMsg(*cloud_in, pcl_cloud);
+
+    velodyne_cloud = pcl_cloud;
+    cloud_ready = true; 
+}
+
+void callback_velodyne(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
+{
+    // process_single_scan(cloud_in);
+    process_registered_cloud(cloud_in);
 
 }
 

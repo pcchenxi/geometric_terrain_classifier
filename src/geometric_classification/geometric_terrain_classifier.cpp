@@ -75,9 +75,8 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     ros::Time begin = ros::Time::now();
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered = cml->load_cloud(pcl_cloud);
-    cout << "got cloud" << endl;
+    cloud_filtered.header.frame_id = pcl_cloud.header.frame_id;
     publish(pub_cloud, cloud_filtered);
-    cout << "publish cloud" << endl;
     cout << ros::Time::now() - begin << "  loaded cloud" << endl;
 }
 
@@ -85,13 +84,14 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "geometric_classifier");
 
-    cml = new Cloud_Matrix_Loador(10, 10, 4, 0.04, 0.04);
+    cml = new Cloud_Matrix_Loador(10, 10, 6, 0.03, 0.02);
 
 
     ros::NodeHandle node; 
     tfListener = new (tf::TransformListener);
 
-    ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/surfel_map/pointcloud", 1, callback_cloud);
+    // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/surfel_map/pointcloud", 1, callback_cloud);
+    ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
     pub_cloud = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered", 1);
 
     ros::spin();

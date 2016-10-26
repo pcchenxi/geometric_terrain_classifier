@@ -7,7 +7,7 @@
     <param name="localscan_buff_size" value="5" />
     <param name="target_frame" value="map" />
 
-    <remap from="/points_raw" to="/velodyne_points" />
+    <remap from="/points_raw" to="/cloud_filtered" />
     <remap from="/image_raw" to="/kinect2/qhd/image_color" />
   </node>
   

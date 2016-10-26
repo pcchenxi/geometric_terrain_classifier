@@ -18,10 +18,9 @@ using namespace cv;
 #define MIN_REQUIRED_H  2
 #define GROUND_ACCURACY 0.05
 
-#define L_SLOPE_R  0.25
-#define S_SLOPE_R  0.10
+#define L_SLOPE_R  0.35
+#define S_SLOPE_R  0.25
 
-float max_cost_ = 0;
 
 class Point_Matrix
 {
@@ -104,7 +103,7 @@ class Cloud_Matrix_Loador
     int     map_hs_;
 
     Mat     ground_mask_;
-    Mat     slope_mat_l_, slope_mat_s_, cloud_mat_; // 3D point space
+    Mat     slope_mat_l_, slope_mat_s_, cloud_mat_, ground_label_; // 3D point space
     Mat     slope_map_l_, slope_map_s_, height_map_; // 2D feature space
 
     // Point_Matrix *cloud_mat_; // 3D feature space
@@ -112,8 +111,10 @@ class Cloud_Matrix_Loador
     const float* mat_ptr;
     const float* slope_l_ptr;
     const float* slope_s_ptr;
+    const float* label_ptr;
 
     pcl::PointCloud<pcl::PointXYZ> ground_points_;
+    pcl::PointCloud<pcl::PointXYZ> ground_points_feature_; // x: height diff, y: slope, z: roughness
     pcl::PointCloud<pcl::PointXYZ> ground_points_index_;
     pcl::PointCloud<pcl::PointXYZ> cloud_mat_index_;
 
@@ -139,7 +140,7 @@ class Cloud_Matrix_Loador
 
       ///////////////////////////////////////////// freture
       Mat get_feature_meanh                         (Mat img, Mat valid_mask, int size);
-      Mat get_feature_roughness                     (Mat slope_l, Mat slope_s, Mat h_diff, Mat valid_mask, int size);
+      Mat get_feature_roughness                     (Mat slope_l, Mat slope_s, Mat valid_mask, int size);
 };
 
 
@@ -194,11 +195,11 @@ pcl::PointCloud<pcl::PointXYZ> Cloud_Matrix_Loador::cloud_filter(pcl::PointCloud
     pass.filter (*cloud_passthrough);
     cout << "after y filter  " << cloud_passthrough->points.size() << endl;
 
-    // pcl::VoxelGrid<pcl::PointXYZ> sor;
-    // sor.setInputCloud (cloud_passthrough);
-    // sor.setLeafSize (0.01, 0.01, 0.01);
-    // sor.filter (*cloud_passthrough);
-    // cout << "after voxel filter  " << cloud_passthrough->points.size() << endl;
+    pcl::VoxelGrid<pcl::PointXYZ> sor;
+    sor.setInputCloud (cloud_passthrough);
+    sor.setLeafSize (0.01, 0.01, 0.01);
+    sor.filter (*cloud_passthrough);
+    cout << "after voxel filter  " << cloud_passthrough->points.size() << endl;
 
     return *cloud_passthrough;
 }
@@ -217,7 +218,7 @@ pcl::PointCloud<pcl::PointXYZ> Cloud_Matrix_Loador::cloud_downsample(pcl::PointC
 
     pcl::VoxelGrid<pcl::PointXYZ> sor;
     sor.setInputCloud (input_cloud);
-    sor.setLeafSize (map_resolution_, map_resolution_, map_h_resolution_);
+    sor.setLeafSize (map_resolution_, map_resolution_, map_resolution_);
     sor.filter (*cloud_passthrough);
     cout << "after voxel filter  " << cloud_passthrough->points.size() << endl;
 
@@ -251,30 +252,29 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
 
     for(size_t i = 0; i < cloud_color.points.size(); i++)
     {
-        // int row = cloud_mat_index_.points[i].y;
-        // int col = cloud_mat_index_.points[i].x;
-        int row = ground_points_index_.points[i].y;
-        int col = ground_points_index_.points[i].x;
+        int row = cloud_mat_index_.points[i].y;
+        int col = cloud_mat_index_.points[i].x;
 
         float cost = cost_map.ptr<float>(row)[col];
 
-        float cost_obs = 1;
-        float cost_rough = 0.05;
-        if(cost >= cost_obs)
+        float cost_obs = 0.04;
+        float cost_rough = 0.03;
+        if(cost > cost_obs)
         {
+            cost = cost_obs;
             cloud_color.points[i].r = 255;
         }    
-        else if(cost > cost_rough)
-        {
-            cloud_color.points[i].r = 25.0;
-            cloud_color.points[i].g = 255.0;
-            cloud_color.points[i].b = 0.0;
-        }   
+        // else if(cost > cost_rough)
+        // {
+        //     cloud_color.points[i].r = 0.0;
+        //     cloud_color.points[i].g = 255.0;
+        //     cloud_color.points[i].b = 255.0;
+        // }   
         else
         {
             cloud_color.points[i].r = 0.0;
             cloud_color.points[i].g = 0.0;
-            cloud_color.points[i].b = 255.0;
+            cloud_color.points[i].b = 255.0/cost_obs * cost;
         }  
     }
 
@@ -292,6 +292,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::load_cloud(pcl::PointClou
     cloud_mat_      = Mat(3, sz, CV_32FC1,  Scalar(0.0));
     slope_mat_l_    = Mat(3, sz, CV_32FC1,  Scalar(0.0));
     slope_mat_s_    = Mat(3, sz, CV_32FC1,  Scalar(0.0));
+    ground_label_   = Mat(3, sz, CV_32FC1,  Scalar(0.0));
 
     // cloud_mat_->clear_matrix();
 
@@ -303,7 +304,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::load_cloud(pcl::PointClou
     cloud_mat_index_.points.resize(cloud_cut.points.size());
 
     cout << "before loading points to mat" << endl;
-    for(size_t i = 0; i < cloud_cut.points.size(); i=i+2)
+    for(size_t i = 0; i < cloud_cut.points.size(); i++)
     {
         pcl::PointXYZ point = cloud_cut.points[i];
 
@@ -321,10 +322,6 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::load_cloud(pcl::PointClou
         // cout << row << " " << col << " " << hit << " " << map_rows_ << " " << map_cols_ << " " << map_hs_ << endl;
         if(hit >= map_hs_ || row >= map_rows_ || col >= map_cols_ || hit < 0 || row < 0 || col < 0)
             continue;
-
-        // cloud_mat_->mat[row][col][hit] += 1;
-        // cloud_mat_->slope_large[row][col][hit] = normal_large->points[i].normal[2];
-        // cloud_mat_->slope_small[row][col][hit] = normal_small->points[i].normal[2];
         
         cloud_mat_.ptr<float>(row, col)[hit] = i;
         cloud_mat_index_.points[i].x = col;
@@ -342,10 +339,11 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::load_cloud(pcl::PointClou
     Mat cost_map = get_costmap(cloud_prt, cloud_ground_prt);
     cout << "------------------got cost map " << ground_points_.size() << endl;
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_color = reformCloud(ground_points_, cost_map);
-    cout << "------------------finished reformCloud " << cloud_color.points.size() << endl;
+    // pcl::PointCloud<pcl::PointXYZRGB> cloud_color = reformCloud(cloud_filtered, cost_map);
+    // cout << "------------------finished reformCloud " << cloud_color.points.size() << endl;
 
-    // pcl::PointCloud<pcl::PointXYZRGB> cloud_color;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_color;
+    copyPointCloud(ground_points_, cloud_color);
     // return cloud_color;
     return cloud_color;
 }
@@ -392,37 +390,26 @@ float Cloud_Matrix_Loador::get_vertical_mean_height(const float* h_ptr, int h)
 {
     int sum = 0;
     int count = 0;
-    int max_num = 0;
-    int max_h = 0;
     int mean_step = GROUND_ACCURACY / map_h_resolution_;
 
-    int start_index = h + mean_step;
     int end_index = h - mean_step;
     if(end_index  < 0)
         end_index = 0;
-    if(start_index  >= map_hs_)
-        start_index = map_hs_ -1;
         
-    for(int height = start_index; height >= end_index; height --)
+    for(int height = h; height >= end_index; height --)
     {
         float num = h_ptr[height];
         if(num == 0)
             continue;
         
-        // if(num > max_num)
-        // {
-        //     max_h = height;
-        // }
         sum      += num * height;
         count    += num;
 
     }
 
-    // if(count == 0)
-    //     cout << "cout = 0!!!!!" << h_ptr[h] << endl;
+    if(count == 0)
+        cout << "cout = 0!!!!!" << h_ptr[h] << endl;
     return sum/count;
-
-    // return max_h;
 }
 
 Mat Cloud_Matrix_Loador::rescaleMat(Mat img)
@@ -447,40 +434,17 @@ Mat Cloud_Matrix_Loador::get_feature_meanh(Mat img, Mat valid_mask, int size)
     return mean_mat;
 }
 
-Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat h_diff, Mat valid_mask, int size)
+Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat valid_mask, int size)
 {
-    max_cost_ = 0;
     // Mat slope_diff  = abs(slope_l - slope_s);
     Mat slope_diff = slope_s;
-    Mat diff_sq, roughness_map;
+    Mat diff_sq, roughness;
     multiply(slope_diff, slope_diff, diff_sq);
-    Mat sq_mean     = get_feature_meanh(diff_sq, valid_mask, 7);
+    Mat sq_mean     = get_feature_meanh(diff_sq, valid_mask, 5);
 
-    cv::sqrt(sq_mean, roughness_map);
+    cv::sqrt(sq_mean, roughness);
 
-    Mat cost_map = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
-
-    for(int row = 0; row < map_rows_; row ++)
-    {
-        for(int col = 0; col < map_cols_; col ++)
-        {
-            float height_diff   = h_diff.ptr<float>(row)[col];
-            float slope         = slope_l.ptr<float>(row)[col];
-            float roughness     = roughness_map.ptr<float>(row)[col];
-
-            cost_map.at<float>(row, col) = roughness;
-
-            if(height_diff > 0.4 || slope > 0.5 || roughness > 0.5)
-            {
-                cost_map.at<float>(row, col) = 1.0;
-            }    
-            
-            else if(roughness > max_cost_)
-                max_cost_ = roughness;
-        }
-    }
-
-    return cost_map;
+    return sq_mean;
 }
 
 Mat Cloud_Matrix_Loador::get_costmap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_all_prt, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground_prt)
@@ -501,59 +465,63 @@ Mat Cloud_Matrix_Loador::get_costmap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_a
 
         int row = ground_points_index_.points[i].y;
         int col = ground_points_index_.points[i].x;
-        slope_map_l_.ptr<float>(row)[col] = 1 - abs(normal_large->points[i].normal[2]);
-        slope_map_s_.ptr<float>(row)[col] = 1 - abs(normal_small->points[i].normal[2]);
+        int h   = ground_points_index_.points[i].z;
+        slope_map_l_.ptr<float>(row)[col] = 1 - normal_large->points[i].normal[2];
+        slope_map_s_.ptr<float>(row)[col] = 1 - normal_small->points[i].normal[2];
+
+        // cout << row << " "  << col << " " << slope_map_l_.ptr<float>(row)[col] << endl;
     }
 
-    cout << "       ------------------ loaded normal" << endl;
+    // cout << "       ------------------ loaded normal" << endl;
+    // /// fill in the holes
+    // // Mat element = getStructuringElement(MORPH_RECT, Size(7,7));
+    // Mat element2 = getStructuringElement(MORPH_RECT, Size(3,3));
 
-    /////// compute maximum height difference ////////////////////
-    Mat min, max, valid_mask;
-    Mat element2 = getStructuringElement(MORPH_RECT, Size(3,3));
-    threshold( height_map_, valid_mask, 0, 1, THRESH_BINARY );
-    min = (1 - valid_mask) * 5 + height_map_;
+    // Mat min, max, diff, valid_mask;
+    // threshold( height_map_, valid_mask, 0, 1, THRESH_BINARY );
 
-    morphologyEx(min, min, MORPH_ERODE, element2);
-    morphologyEx(height_map_, max, MORPH_DILATE, element2);
-
-    Mat diff = (max - min) & valid_mask;
-
-    Mat mean_mat = get_feature_meanh(height_map_, valid_mask, 5);
-    Mat roughness_mat = get_feature_roughness(slope_map_l_, slope_map_s_, diff, valid_mask, 5);
+    // Mat mean_mat = get_feature_meanh(height_map_, valid_mask, 5);
+    // Mat roughness_mat = get_feature_roughness(slope_map_l_, slope_map_s_, valid_mask, 5);
     // morphologyEx(roughness_mat, roughness_mat, MORPH_DILATE, element2);
-    // Mat h = rescaleMat(height_map_);
-    Mat m = rescaleMat(mean_mat);
-    // // Mat d = rescaleMat(diff);
 
-    Mat s_l = rescaleMat(slope_map_l_);
-    Mat s_s = rescaleMat(slope_map_s_);
-    Mat r = rescaleMat(roughness_mat);
-    Mat d_min = rescaleMat(min);
-    Mat d_max = rescaleMat(max);
-    Mat d_diff = rescaleMat(diff);
+    // // diff         = abs(mean_mat - height_map_);
+    // // diff         = diff & valid_mask;
 
-    imshow("mean height", mean_mat);
-    imshow("s_l", s_l);
-    imshow("s_s", s_s);
-    // imshow("d_min", d_min);
-    // imshow("d_max", d_max);
-    // imshow("diff", diff);
-    imshow("roughness_mat", r);
+    // // // morphologyEx(height_map_, img_processed, MORPH_CLOSE, element);
 
-    waitKey(50);
+    // // morphologyEx(height_map_, max, MORPH_DILATE, element2);
+    // // morphologyEx(height_map_, min, MORPH_ERODE, element2);
 
-    return roughness_mat;
+    // // diff = height_map_ - min;
+    // // img_processed = (diff == height_map_);
+    // // // img_processed = diff & valid_mask;
+
+    // // Mat h = rescaleMat(height_map_);
+    // Mat m = rescaleMat(mean_mat);
+    // // // Mat d = rescaleMat(diff);
+
+    // Mat s_l = rescaleMat(slope_map_l_);
+    // Mat s_s = rescaleMat(slope_map_s_);
+    // Mat r = rescaleMat(roughness_mat);
+
+    // imshow("mean height", m);
+    // imshow("s_l", s_l);
+    // imshow("s_s", s_s);
+    // // imshow("height", h);
+    // imshow("roughness_mat", r);
+
+    // waitKey(10);
+
+    return height_map_;
 }
 
 pcl::PointCloud<pcl::PointXYZ> Cloud_Matrix_Loador::get_ground_points(pcl::PointCloud<pcl::PointXYZ> *cloud)
 {
     cout << "in set_ground_points" << endl;
-    ground_points_.points.clear();
-    ground_points_index_.points.clear();
+    // ground_points_.points.clear();
+    // ground_points_index_.points.clear();
 
-    Mat img_processed;
-    float scale = map_h_resolution_;
-
+    pcl::PointCloud<pcl::PointXYZ> ground;
     for(int row = 0; row < map_rows_; row ++)
     {
         for(int col = 0; col < map_cols_; col ++)
@@ -561,31 +529,24 @@ pcl::PointCloud<pcl::PointXYZ> Cloud_Matrix_Loador::get_ground_points(pcl::Point
             mat_ptr     = cloud_mat_.ptr<float>(row, col);
 
             for(int h = 0; h < map_hs_; h ++)
-            {
+            {   
                 bool is_ground = is_potential_ground(mat_ptr, h);
 
                 if(is_ground)
                 {
-                    // float height = get_vertical_mean_height(mat_ptr, h) * scale;
+                    ground_label_.ptr<float>(row, col)[h] = 1;
                     int cloud_index = mat_ptr[h];
-                    height_map_.at<float>(row, col) = h * map_h_resolution_;
+                    ground.points.push_back(cloud->points[cloud_index]);
 
-                    pcl::PointXYZ point, point_index;
-                    point.x = (map_cols_ - col) * map_resolution_ - map_width_/2;
-                    point.y = row * map_resolution_ - map_broad_/2;
-                    point.z = h * map_h_resolution_ - map_height_/2;
-                    
-                    point_index.x = col;
-                    point_index.y = row;
-                    ground_points_.points.push_back(point);
-                    ground_points_index_.points.push_back(point_index);
-                    continue;
+                    pcl::PointXYZ point;
+                    point.x = col; 
+                    point.y = row; 
+                    point.z = h; 
+                    ground_points_index_.points.push_back(point);                                    
                 }
             }  
         }
     }
 
-    cout << "finish ground point slelction" << endl;
-
-    return ground_points_;
+    return ground;
 }
