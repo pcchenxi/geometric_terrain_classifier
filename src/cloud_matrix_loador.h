@@ -259,14 +259,14 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         float cost = cost_map.ptr<float>(row)[col];
 
         float cost_obs = 1;
-        float cost_rough = 0.05;
+        float cost_rough = 0.1;
         if(cost >= cost_obs)
         {
-            cloud_color.points[i].r = 255;
+            cloud_color.points[i].r = 200;
         }    
         else if(cost > cost_rough)
         {
-            cloud_color.points[i].r = 25.0;
+            cloud_color.points[i].r = 150.0;
             cloud_color.points[i].g = 255.0;
             cloud_color.points[i].b = 0.0;
         }   

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>terrain_classifier</name>
+  <name>geometric_terrain_classifier</name>
   <version>0.0.0</version>
-  <description>The terrain_classifier package</description>
+  <description>The geometric_terrain_classifier package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag --> 
   <!-- Example:  -->
