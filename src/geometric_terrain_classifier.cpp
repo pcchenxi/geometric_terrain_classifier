@@ -90,8 +90,8 @@ int main(int argc, char** argv)
     ros::NodeHandle node; 
     tfListener = new (tf::TransformListener);
 
-    // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/surfel_map/pointcloud", 1, callback_cloud);
-    ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
+    ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/points_raw", 1, callback_cloud);
+    // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
     pub_cloud = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered", 1);
 
     ros::spin();

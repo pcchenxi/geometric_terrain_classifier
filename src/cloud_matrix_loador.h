@@ -532,15 +532,15 @@ Mat Cloud_Matrix_Loador::get_costmap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_a
     Mat d_max = rescaleMat(max);
     Mat d_diff = rescaleMat(diff);
 
-    imshow("mean height", mean_mat);
-    imshow("s_l", s_l);
-    imshow("s_s", s_s);
+    // imshow("mean height", mean_mat);
+    // imshow("s_l", s_l);
+    // imshow("s_s", s_s);
     // imshow("d_min", d_min);
     // imshow("d_max", d_max);
     // imshow("diff", diff);
-    imshow("roughness_mat", r);
+    // imshow("roughness_mat", r);
 
-    waitKey(50);
+    // waitKey(50);
 
     return roughness_mat;
 }
