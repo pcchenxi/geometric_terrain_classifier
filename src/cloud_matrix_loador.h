@@ -542,6 +542,7 @@ Mat Cloud_Matrix_Loador::get_costmap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_a
 
     // waitKey(50);
 
+
     return roughness_mat;
 }
 
