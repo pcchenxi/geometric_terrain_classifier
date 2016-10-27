@@ -49,7 +49,7 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
     {
         // tf_listener_->waitForTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, ros::Duration(1.0));
         // tf_listener_->lookupTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, to_target);
-        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, ros::Time(0), to_target);
+        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
@@ -68,16 +68,38 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
 
 void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
+    string output_frame = "world_corrected";
     sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, "base_link");
     pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
     pcl::fromROSMsg(cloud_transformed, pcl_cloud);
 
     ros::Time begin = ros::Time::now();
 
+    // save transform to world
+    tf::StampedTransform to_target;
+    try 
+    {
+        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, cloud_in->header.stamp, to_target);
+    }
+    catch (tf::TransformException& ex) 
+    {
+        ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
+        // return cloud_in;
+    }
+    Eigen::Matrix4f eigen_transform;
+    pcl_ros::transformAsMatrix (to_target, eigen_transform);
+
+    // process cloud
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered = cml->load_cloud(pcl_cloud);
-    cloud_filtered.header.frame_id = pcl_cloud.header.frame_id;
+
+    pcl::transformPointCloud (cloud_filtered, cloud_filtered, eigen_transform);
+    cloud_filtered.header.frame_id = output_frame;
+
     publish(pub_cloud, cloud_filtered);
-    cout << ros::Time::now() - begin << "  loaded cloud" << endl;
+    cout << ros::Time::now() - begin << "  loaded cloud " << cloud_in->header.frame_id << " " << cloud_filtered.header.frame_id << endl;
+
+
+    
 }
 
 int main(int argc, char** argv)
