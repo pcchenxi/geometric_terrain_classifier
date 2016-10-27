@@ -1,4 +1,6 @@
-<!--   /mapping_nodelet/pointcloud_downsampled    /surfel_map/pointcloud -->
+<!--  UBO Slam: /mapping_nodelet/pointcloud_downsampled    
+      UBO new dataset:/surfel_map/pointcloud 
+      NDT slam: /ndt_map-->
 <launch>
 
   <node pkg="geometric_terrain_classifier" type="geometric_classifier" name="geometric_classifier" output="screen">
