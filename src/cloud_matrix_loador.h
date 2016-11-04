@@ -251,10 +251,15 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
 
     for(size_t i = 0; i < cloud_color.points.size(); i++)
     {
-        // int row = cloud_mat_index_.points[i].y;
-        // int col = cloud_mat_index_.points[i].x;
-        int row = ground_points_index_.points[i].y;
-        int col = ground_points_index_.points[i].x;
+        // int row = ground_points_index_.points[i].y;
+        // int col = ground_points_index_.points[i].x;
+
+        pcl::PointXYZ point = cloud.points[i];
+        point.x     += map_width_/2;
+        point.y     += map_broad_/2;
+        int col     = point.x / map_resolution_;
+        int row     = point.y / map_resolution_;
+        col         = map_cols_ - col;
 
         float cost = cost_map.ptr<float>(row)[col];
 
@@ -266,7 +271,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         }    
         else if(cost > cost_rough)
         {
-            cloud_color.points[i].r = 150.0;
+            cloud_color.points[i].r = 100.0;
             cloud_color.points[i].g = 255.0;
             cloud_color.points[i].b = 0.0;
         }   
@@ -470,7 +475,7 @@ Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat h_d
 
             cost_map.at<float>(row, col) = roughness;
 
-            if(height_diff > 0.4 || slope > 0.5 || roughness > 0.5)
+            if(height_diff > 0.4 || slope > 0.6)
             {
                 cost_map.at<float>(row, col) = 1.0;
             }    

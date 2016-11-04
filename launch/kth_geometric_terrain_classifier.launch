@@ -5,7 +5,7 @@
 
   <node pkg="geometric_terrain_classifier" type="geometric_classifier" name="geometric_classifier" output="screen">
 
-    <remap from="/points_raw" to="/mapping_nodelet/pointcloud_downsampled" />
+    <remap from="/points_raw" to="/mapping_nodelet/pointcloud" />
 
   </node>
   
