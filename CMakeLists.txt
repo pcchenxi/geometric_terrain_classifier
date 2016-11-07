@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   image_geometry
+  momaro_heightmap
 )
 
 catkin_package(
