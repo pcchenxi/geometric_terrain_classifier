@@ -132,11 +132,16 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->load_cloud(pcl_cloud, 20, 20, 10, 1.0, 0.01);
     convert_to_heightmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 1.0, height_map3);
 
+    pcl::transformPointCloud (cloud_filtered1, cloud_filtered1, eigen_transform);
     pcl::transformPointCloud (cloud_filtered2, cloud_filtered2, eigen_transform);
+    pcl::transformPointCloud (cloud_filtered3, cloud_filtered3, eigen_transform);
+    cloud_filtered1.header.frame_id = output_frame;
     cloud_filtered2.header.frame_id = output_frame;
+    cloud_filtered3.header.frame_id = output_frame;
 
-    publish(pub_cloud, cloud_filtered2);
     cout << ros::Time::now() - begin << "  loaded cloud " << cloud_in->header.frame_id << " " << cloud_filtered2.header.frame_id << endl;
+
+    publish(pub_cloud, cloud_filtered2); // publishing colored points with defalt cost function
 
     pub_heightmap1.publish(height_map1);
     pub_heightmap2.publish(height_map2);

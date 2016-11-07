@@ -24,73 +24,6 @@ using namespace cv;
 
 float max_cost_ = 0;
 
-class Point_Matrix
-{
-    int matrix_size_;
-
-    int matrix_rows_;
-    int matrix_cols_;
-    int matrix_hights_;
-
-    public:
-    float ***mat;
-    float ***slope_large;
-    float ***slope_small;
-
-    Point_Matrix(int matrix_rows, int matrix_cols, int matrix_hights)
-    {
-        mat = new float **[matrix_rows];
-        slope_large = new float **[matrix_rows];
-        slope_small = new float **[matrix_rows];
-
-        for(int row = 0; row <= matrix_rows; row ++)
-        {
-            mat[row] = new float* [matrix_cols];
-            slope_large[row] = new float* [matrix_cols];
-            slope_small[row] = new float* [matrix_cols];
-
-            for(int col = 0; col <= matrix_cols; col ++)
-            {   
-                mat[row][col] = new float[matrix_hights];
-                slope_large[row][col] = new float[matrix_hights];
-                slope_small[row][col] = new float[matrix_hights];
-            }
-        }
-
-        matrix_rows_ = matrix_rows;
-        matrix_cols_ = matrix_cols;
-        matrix_hights_ = matrix_hights;
-        matrix_size_ = matrix_rows * matrix_cols * matrix_hights;
-    };
-
-    ~Point_Matrix()
-    {
-        for(int row = 0; row <= matrix_rows_; row ++)
-        {
-            for(int col = 0; col <= matrix_cols_; col ++)
-            {   
-                delete [] mat[row][col];
-                delete [] slope_large[row][col];
-                delete [] slope_small[row][col];
-            }
-        }
-    };
-
-    void clear_matrix()
-    {
-        for(int row = 0; row <= matrix_rows_; row ++)
-        {
-            for(int col = 0; col <= matrix_cols_; col ++)
-            {   
-                memset(mat[row][col], 0, sizeof(float)*matrix_hights_ );
-                memset(slope_large[row][col], 0, sizeof(float)*matrix_hights_ );
-                memset(slope_small[row][col], 0, sizeof(float)*matrix_hights_ );
-            }
-        }
-    };
-
-};
-
 class Cloud_Matrix_Loador
 {
 
@@ -282,7 +215,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         float cost = cost_map.ptr<float>(row)[col];
 
         float cost_obs = 1;
-        float cost_rough = 0.15;
+        float cost_rough = 0.10;
         if(cost >= cost_obs)
         {
             cloud_color.points[i].r = 200;
