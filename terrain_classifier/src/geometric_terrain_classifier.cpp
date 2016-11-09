@@ -2,7 +2,7 @@
 #include <tf/transform_listener.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
-#include <momaro_heightmap/HeightMap.h>
+#include <centauro_costmap/CostMap.h>
 
 #include "cloud_matrix_loador.h"
 
@@ -10,7 +10,7 @@
 tf::TransformListener* tfListener = NULL;
 Cloud_Matrix_Loador* cml;
 
-ros::Publisher  pub_cloud, pub_heightmap1, pub_heightmap2, pub_heightmap3;
+ros::Publisher  pub_cloud, pub_costmap1, pub_costmap2, pub_costmap3;
 bool initialized = false;
 
 void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZ> cloud, int type = 2)
@@ -67,18 +67,18 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
     return cloud_out;
 }
 
-void convert_to_heightmap(Mat h_diff, Mat slope, Mat roughness, float resoluation, momaro_heightmap::HeightMap &height_map)
+void convert_to_costmap(Mat h_diff, Mat slope, Mat roughness, float resoluation, centauro_costmap::CostMap &cost_map)
 {
-    height_map.cells_x = h_diff.cols;
-    height_map.cells_y = h_diff.rows;
-    height_map.resolution = resoluation;
+    cost_map.cells_x = h_diff.cols;
+    cost_map.cells_y = h_diff.rows;
+    cost_map.resolution = resoluation;
 
-    height_map.origin_x = height_map.cells_x/2;
-    height_map.origin_y = height_map.cells_y/2;
+    cost_map.origin_x = cost_map.cells_x/2;
+    cost_map.origin_y = cost_map.cells_y/2;
 
-    height_map.height.resize(height_map.cells_x * height_map.cells_y * sizeof(float));
-    height_map.slope.resize(height_map.cells_x * height_map.cells_y * sizeof(float));
-    height_map.roughness.resize(height_map.cells_x * height_map.cells_y * sizeof(float));
+    cost_map.height.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
+    cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
+    cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
 
     for(int row = 0; row < h_diff.rows; row ++)
     {
@@ -90,9 +90,9 @@ void convert_to_heightmap(Mat h_diff, Mat slope, Mat roughness, float resoluatio
 
             int index = row * h_diff.rows + col;
 
-            height_map.height[index]    = height_diff;
-            height_map.slope[index]     = slope_v;
-            height_map.roughness[index] = roughness_v;
+            cost_map.height[index]    = height_diff;
+            cost_map.slope[index]     = slope_v;
+            cost_map.roughness[index] = roughness_v;
         }
     }
 }
@@ -122,15 +122,15 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     pcl_ros::transformAsMatrix (to_target, eigen_transform);
 
     // process cloud
-    momaro_heightmap::HeightMap height_map1, height_map2, height_map3;
+    centauro_costmap::CostMap cost_map1, cost_map2, cost_map3;
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->load_cloud(pcl_cloud, 3, 3, 10, 0.025, 0.01);
-    convert_to_heightmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.025, height_map1);
+    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.025, cost_map1);
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->load_cloud(pcl_cloud, 5, 5, 10, 0.2, 0.01);
-    convert_to_heightmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.2, height_map2);
+    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.2, cost_map2);
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->load_cloud(pcl_cloud, 20, 20, 10, 1.0, 0.01);
-    convert_to_heightmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 1.0, height_map3);
+    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 1.0, cost_map3);
 
     pcl::transformPointCloud (cloud_filtered1, cloud_filtered1, eigen_transform);
     pcl::transformPointCloud (cloud_filtered2, cloud_filtered2, eigen_transform);
@@ -143,9 +143,9 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     publish(pub_cloud, cloud_filtered2); // publishing colored points with defalt cost function
 
-    pub_heightmap1.publish(height_map1);
-    pub_heightmap2.publish(height_map2);
-    pub_heightmap3.publish(height_map3);
+    pub_costmap1.publish(cost_map1);
+    pub_costmap2.publish(cost_map2);
+    pub_costmap3.publish(cost_map3);
     
 }
 
@@ -163,9 +163,9 @@ int main(int argc, char** argv)
     // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
     pub_cloud      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered", 1);
 
-    pub_heightmap1 = node.advertise<momaro_heightmap::HeightMap>("/terrain_classifier/map1", 1);
-    pub_heightmap2 = node.advertise<momaro_heightmap::HeightMap>("/terrain_classifier/map2", 1);
-    pub_heightmap3 = node.advertise<momaro_heightmap::HeightMap>("/terrain_classifier/map3", 1);
+    pub_costmap1 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map1", 1);
+    pub_costmap2 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map2", 1);
+    pub_costmap3 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map3", 1);
 
     ros::spin();
 

@@ -22,8 +22,6 @@ using namespace cv;
 #define L_SLOPE_R  0.20
 #define S_SLOPE_R  0.15
 
-float max_cost_ = 0;
-
 class Cloud_Matrix_Loador
 {
 
@@ -215,12 +213,12 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         float cost = cost_map.ptr<float>(row)[col];
 
         float cost_obs = 1;
-        float cost_rough = 0.10;
-        if(cost >= cost_obs)
+        float cost_rough = 2;
+        if(cost == cost_obs)
         {
             cloud_color.points[i].r = 200;
         }    
-        else if(cost > cost_rough)
+        else if(cost == cost_rough)
         {
             cloud_color.points[i].r = 100.0;
             cloud_color.points[i].g = 255.0;
@@ -236,6 +234,34 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
 
     return cloud_color;
 }
+
+Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness)
+{
+    Mat cost_map = Mat(h_diff.rows, h_diff.cols, CV_32FC1,  Scalar(0));
+    for(int row = 0; row < h_diff.rows; row ++)
+    {
+        for(int col = 0; col < h_diff.cols; col ++)
+        {
+            float height_diff   = h_diff.ptr<float>(row)[col];
+            float slope_v       = slope.ptr<float>(row)[col];
+            float roughness_v   = roughness.ptr<float>(row)[col];
+
+            cost_map.at<float>(row, col) = roughness_v;
+
+            if(height_diff > 0.4 || slope_v > 0.5)
+            {
+                cost_map.at<float>(row, col) = 1.0;   // obstacle
+            }    
+            else if(roughness_v > 0.10)
+                cost_map.at<float>(row, col) = 2.0;  // rough
+            else 
+                cost_map.at<float>(row, col) = 3.0;  // flat
+        }
+    }
+
+    return cost_map;
+}
+
 
 pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, 
                         float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution)
@@ -409,7 +435,6 @@ Mat Cloud_Matrix_Loador::get_feature_meanh(Mat img, Mat valid_mask, int size)
 
 Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat h_diff, Mat valid_mask, int size)
 {
-    max_cost_ = 0;
     // Mat slope_diff  = abs(slope_l - slope_s);
     Mat slope_diff = slope_s;
     Mat diff_sq, roughness_map;
@@ -422,41 +447,14 @@ Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat h_d
     return roughness_map;
 }
 
-Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness)
-{
-    Mat cost_map = Mat(h_diff.rows, h_diff.cols, CV_32FC1,  Scalar(0));
-    for(int row = 0; row < h_diff.rows; row ++)
-    {
-        for(int col = 0; col < h_diff.cols; col ++)
-        {
-            float height_diff   = h_diff.ptr<float>(row)[col];
-            float slope_v       = slope.ptr<float>(row)[col];
-            float roughness_v   = roughness.ptr<float>(row)[col];
-
-            cost_map.at<float>(row, col) = roughness_v;
-
-            if(height_diff > 0.4 || slope_v > 0.5)
-            {
-                cost_map.at<float>(row, col) = 1.0;
-            }    
-            
-            else if(roughness_v > max_cost_)
-                max_cost_ = roughness_v;
-        }
-    }
-
-    return cost_map;
-}
-
-
 Mat Cloud_Matrix_Loador::get_costmap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_all_prt, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground_prt)
 {
     /////////////////////// computer normal ///////////////////
     pcl::PointCloud<pcl::Normal>::Ptr       normal_large        (new pcl::PointCloud<pcl::Normal>);
     pcl::PointCloud<pcl::Normal>::Ptr       normal_small        (new pcl::PointCloud<pcl::Normal>);
 
-    float larger_r = map_resolution_ * 4;
-    float smaller_r = larger_r / 2;
+    float larger_r = map_resolution_ * 5;
+    float smaller_r = larger_r / 3;
     normal_large = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, larger_r);
     normal_small = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, smaller_r);
 

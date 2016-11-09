@@ -1,0 +1,13 @@
+<package format="2">
+	<name>centauro_costmap</name>
+	<description>contain terrain feature list for each pixel</description>
+	<version>0.0.1</version>
+	<license>BSD</license>
+	<maintainer email="xi8@kth.se">Xi Chen</maintainer>
+
+	<buildtool_depend>catkin</buildtool_depend>
+	<depend>config_server</depend>
+
+	<export>
+	</export>
+</package>
