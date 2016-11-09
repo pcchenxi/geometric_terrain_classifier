@@ -13,5 +13,6 @@ float32 resolution
 
 # Height values per cell (row step: cells_x)
 float32[] height
+float32[] height_diff
 float32[] slope
 float32[] roughness

@@ -19,7 +19,7 @@ void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZ> cloud, int type 
     pcl::toROSMsg(cloud, pointlcoud2);
 
     if(type == 2)
-    {
+    { 
         pub.publish(pointlcoud2);
     }
     else
@@ -67,7 +67,7 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
     return cloud_out;
 }
 
-void convert_to_costmap(Mat h_diff, Mat slope, Mat roughness, float resoluation, centauro_costmap::CostMap &cost_map)
+void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, float resoluation, centauro_costmap::CostMap &cost_map)
 {
     cost_map.cells_x = h_diff.cols;
     cost_map.cells_y = h_diff.rows;
@@ -76,23 +76,26 @@ void convert_to_costmap(Mat h_diff, Mat slope, Mat roughness, float resoluation,
     cost_map.origin_x = cost_map.cells_x/2;
     cost_map.origin_y = cost_map.cells_y/2;
 
-    cost_map.height.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
-    cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
-    cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y * sizeof(float));
+    cost_map.height.resize(cost_map.cells_x * cost_map.cells_y);
+    cost_map.height_diff.resize(cost_map.cells_x * cost_map.cells_y);
+    cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y);
+    cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y);
 
     for(int row = 0; row < h_diff.rows; row ++)
     {
         for(int col = 0; col < h_diff.cols; col ++)
         {
+            float height_v      = height.ptr<float>(row)[col];
             float height_diff   = h_diff.ptr<float>(row)[col];
             float slope_v       = slope.ptr<float>(row)[col];
             float roughness_v   = roughness.ptr<float>(row)[col];
 
             int index = row * h_diff.rows + col;
 
-            cost_map.height[index]    = height_diff;
-            cost_map.slope[index]     = slope_v;
-            cost_map.roughness[index] = roughness_v;
+            cost_map.height[index]       = height_v;
+            cost_map.height_diff[index]  = height_diff;
+            cost_map.slope[index]        = slope_v;
+            cost_map.roughness[index]    = roughness_v;
         }
     }
 }
@@ -100,8 +103,10 @@ void convert_to_costmap(Mat h_diff, Mat slope, Mat roughness, float resoluation,
 
 void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
+    cout << "cloud recieved: " << ros::Time::now() << endl;
     string output_frame = "world_corrected";
-    sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, "base_link");
+    string process_frame = "base_link";
+    sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, process_frame);
     pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
     pcl::fromROSMsg(cloud_transformed, pcl_cloud);
 
@@ -123,23 +128,32 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     // process cloud
     centauro_costmap::CostMap cost_map1, cost_map2, cost_map3;
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->load_cloud(pcl_cloud, 3, 3, 10, 0.025, 0.01);
-    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.025, cost_map1);
+    cost_map1.header.frame_id = process_frame;
+    cost_map2.header.frame_id = process_frame;
+    cost_map3.header.frame_id = process_frame;
+    cost_map1.header.stamp = cloud_in->header.stamp;
+    cost_map2.header.stamp = cloud_in->header.stamp;
+    cost_map3.header.stamp = cloud_in->header.stamp;
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->load_cloud(pcl_cloud, 5, 5, 10, 0.2, 0.01);
-    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.2, cost_map2);
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->load_cloud(pcl_cloud, 20, 20, 10, 1.0, 0.01);
-    convert_to_costmap(cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 1.0, cost_map3);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->load_cloud(pcl_cloud, 3, 3, 10, 0.025, 0.015);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.025, cost_map1);
 
-    pcl::transformPointCloud (cloud_filtered1, cloud_filtered1, eigen_transform);
-    pcl::transformPointCloud (cloud_filtered2, cloud_filtered2, eigen_transform);
-    pcl::transformPointCloud (cloud_filtered3, cloud_filtered3, eigen_transform);
-    cloud_filtered1.header.frame_id = output_frame;
-    cloud_filtered2.header.frame_id = output_frame;
-    cloud_filtered3.header.frame_id = output_frame;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->load_cloud(pcl_cloud, 5, 5, 10, 0.2, 0.015);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 0.2, cost_map2);
 
-    cout << ros::Time::now() - begin << "  loaded cloud " << cloud_in->header.frame_id << " " << cloud_filtered2.header.frame_id << endl;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->load_cloud(pcl_cloud, 20, 20, 10, 1.0, 0.015);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, 1.0, cost_map3);
+
+    cout << "testing output: " << cost_map2.height[100] << " " << cost_map2.height_diff[100] << " " << cost_map2.slope[100] << " " << cost_map2.roughness[100] << endl;
+    // pcl::transformPointCloud (cloud_filtered1, cloud_filtered1, eigen_transform);
+    // pcl::transformPointCloud (cloud_filtered2, cloud_filtered2, eigen_transform);
+    // pcl::transformPointCloud (cloud_filtered3, cloud_filtered3, eigen_transform);
+    cloud_filtered1.header.frame_id = process_frame;
+    cloud_filtered2.header.frame_id = process_frame;
+    cloud_filtered3.header.frame_id = process_frame;
+
+    cout << ros::Time::now() - begin << "  loaded cloud " << cloud_in->header.frame_id << " " << cloud_filtered1.header.frame_id << endl;
 
     publish(pub_cloud, cloud_filtered2); // publishing colored points with defalt cost function
 
