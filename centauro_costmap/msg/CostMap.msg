@@ -5,8 +5,8 @@ uint32 cells_x
 uint32 cells_y
 
 # Cell coordinates of (0,0)
-uint32 origin_x
-uint32 origin_y
+float32 origin_x
+float32 origin_y
 
 # Resolution (m / cell)
 float32 resolution
