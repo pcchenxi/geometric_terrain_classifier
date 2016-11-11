@@ -584,7 +584,7 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
     resize(slope_map_l_,  output_slope_,       Size(), 0.33, 0.33, INTER_NEAREST);
     resize(roughness_mat, output_roughness_,   Size(), 0.33, 0.33, INTER_NEAREST);
     resize(mean_mat,      output_height_,      Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(cost_map,      output_cost_,      Size(), 0.33, 0.33, INTER_NEAREST);
+    resize(cost_map,      output_cost_,        Size(), 0.33, 0.33, INTER_NEAREST);
 
     output_height_ = output_height_ - map_height_/2;
 
