@@ -73,8 +73,8 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
     cost_map.cells_y = h_diff.rows;
     cost_map.resolution = resoluation;
 
-    cost_map.origin_x = robot_x;
-    cost_map.origin_y = robot_y;
+    cost_map.origin_x = robot_x - 0.5 * cost_map.cells_x * resoluation;
+    cost_map.origin_y = robot_y - 0.5 * cost_map.cells_y * resoluation;
 
     cost_map.height.resize(cost_map.cells_x * cost_map.cells_y);
     cost_map.height_diff.resize(cost_map.cells_x * cost_map.cells_y);
@@ -115,7 +115,7 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
 void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
     cout << "cloud recieved: " << ros::Time::now() << endl;
-    string output_frame = "world_corrected";
+    string output_frame = "map";
     string process_frame = "base_link_oriented";
     sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, process_frame);
     pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
@@ -139,9 +139,9 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     // process cloud
     centauro_costmap::CostMap cost_map1, cost_map2, cost_map3;
-    cost_map1.header.frame_id = process_frame;
-    cost_map2.header.frame_id = process_frame;
-    cost_map3.header.frame_id = process_frame;
+    cost_map1.header.frame_id = output_frame;
+    cost_map2.header.frame_id = output_frame;
+    cost_map3.header.frame_id = output_frame;
     cost_map1.header.stamp = cloud_in->header.stamp;
     cost_map2.header.stamp = cloud_in->header.stamp;
     cost_map3.header.stamp = cloud_in->header.stamp;
@@ -149,24 +149,24 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     float robot_x = to_target.getOrigin().x();
     float robot_y = to_target.getOrigin().y();
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 3, 3, 6, 0.025, 0.01);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 3, 3, 6, 0.025, 0.015);
+    cloud_filtered1.header.frame_id = process_frame;
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.025, cost_map1, robot_x, robot_y);
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->process_cloud(pcl_cloud, 5, 5, 6, 0.2, 0.01);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->process_cloud(pcl_cloud, 10, 10, 6, 0.2, 0.015);
+    cloud_filtered2.header.frame_id = process_frame;
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.2, cost_map2, robot_x, robot_y);
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->process_cloud(pcl_cloud, 30, 30, 6, 1.0, 0.01);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered3 = cml->process_cloud(pcl_cloud, 30, 30, 6, 1.0, 0.015);
+    cloud_filtered3.header.frame_id = process_frame;
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 1.0, cost_map3, robot_x, robot_y);
 
     cout << "robot position : " << robot_x << " " << robot_y << endl;
     // pcl::transformPointCloud (cloud_filtered1, cloud_filtered1, eigen_transform);
     // pcl::transformPointCloud (cloud_filtered2, cloud_filtered2, eigen_transform);
     // pcl::transformPointCloud (cloud_filtered3, cloud_filtered3, eigen_transform);
-    cloud_filtered1.header.frame_id = process_frame;
-    cloud_filtered2.header.frame_id = process_frame;
-    cloud_filtered3.header.frame_id = process_frame;
 
-    cout << ros::Time::now() - begin << "  loaded cloud " << cloud_in->header.frame_id << " " << cloud_filtered1.header.frame_id << endl;
+    cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
 
     publish(pub_cloud, cloud_filtered2); // publishing colored points with defalt cost function
 

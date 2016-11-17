@@ -75,8 +75,9 @@ class Cloud_Matrix_Loador
 
 
     ///////////////////////////////////////////// freture
+    Mat  fill_missingvalue                        (Mat img);
     Mat  get_features                             (pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_all_prt, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground_prt);
-    Mat  get_feature_meanh                        (Mat img, Mat valid_mask, int size);
+    Mat  get_feature_meanh                        (Mat img, int size);
     Mat  get_feature_roughness                    (Mat slope_l, Mat slope_s, Mat h_diff, Mat valid_mask, int size);
     void get_feature_slope_bycloud                (pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_all_prt, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground_prt, Mat valid_mask);
     void get_feature_slope_byimgae                (Mat img_height, Mat valid_mask);
@@ -217,8 +218,9 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         //     cost = max;
         // cloud_color.points[i].r = 255/max * cost; 
 
-        float cost_obs = 1;
+        float cost_obs = 3;
         float cost_rough = 2;
+        float cost_flat = 1;
         if(cost == cost_obs)
         {
             cloud_color.points[i].r = 200;
@@ -229,12 +231,18 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
             cloud_color.points[i].g = 255.0;
             cloud_color.points[i].b = 0.0;
         }   
-        else
+        else if(cost == cost_flat)
         {
             cloud_color.points[i].r = 0.0;
             cloud_color.points[i].g = 0.0;
             cloud_color.points[i].b = 255.0;
         }  
+        else if(cost == -1)
+        {
+            cloud_color.points[i].r = 0.0;
+            cloud_color.points[i].g = 255.0;
+            cloud_color.points[i].b = 255.0;
+        }
     }
 
     return cloud_color;
@@ -258,26 +266,25 @@ Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness, Mat 
             float slope_v       = slope.ptr<float>(row)[col];
             float roughness_v   = roughness.ptr<float>(row)[col];
 
-            // float angle_s = abs(atan(slope_v)) * 180.0 / M_PI;
-            // if(angle_s > 90)
-            //     angle_s = 180 - angle_s;
-
-            // float angle_r = abs(atan(roughness_v)) * 180.0 / M_PI;
-            // if(angle_r > 90)
-            //     angle_r = 180 - angle_r;
-
-            // cost_map.at<float>(row, col) = slope_v * 0.6 + roughness * 0.4;
+            // if(roughness_v != roughness_v)
+            // {
+            //     cout << "roughness NAN !  " << roughness_v << endl;
+            //     cost_map.at<float>(row, col) = 255.0;
+            //     continue;
+            // }    
+            // if(slope_v != slope_v)
+            //     cout << "slope NAN !" << endl;
 
             float cost = slope_v * 0.5 + roughness_v * 0.5;
         
             if(height_diff > 0.4)
             {
-                cost = 1.0;   // obstacle
+                cost = 3.0;   // obstacle
             }    
             else if(cost > 0.02)
                 cost = 2.0;  // rough
             else 
-                cost = 3.0;  // flat
+                cost = 1.0;  // flat
 
             cost_map.at<float>(row, col) = cost;
 
@@ -446,17 +453,20 @@ Mat Cloud_Matrix_Loador::rescaleMat(Mat img)
 {
     double min_v, max_v;
     minMaxLoc(img, &min_v, &max_v);
-    img = img/max_v;
+    Mat scaled_img = img/max_v;
 
     Mat ucharMatScaled;
-    img.convertTo(ucharMatScaled, CV_8UC1, 255, 0); 
+    scaled_img.convertTo(ucharMatScaled, CV_8UC1, 255, 0); 
 
     return ucharMatScaled;
 }
 
-Mat Cloud_Matrix_Loador::get_feature_meanh(Mat img, Mat valid_mask, int size)
+Mat Cloud_Matrix_Loador::get_feature_meanh(Mat img, int size)
 {
-    Mat blur_sum, blur_count, mean_mat;
+    Mat blur_sum, blur_count, mean_mat, valid_mask;
+
+    threshold( img, valid_mask, 0, 1, THRESH_BINARY );
+
     boxFilter(img, blur_sum, img.depth(), Size(size, size), Point(-1,-1), false);
     boxFilter(valid_mask, blur_count, valid_mask.depth(), Size(size, size), Point(-1,-1), false);
 
@@ -472,9 +482,9 @@ Mat Cloud_Matrix_Loador::get_feature_roughness(Mat slope_l, Mat slope_s, Mat h_d
     Mat diff_sq, roughness_map;
     multiply(slope_diff, slope_diff, diff_sq);
 
-    Mat sq_mean    = get_feature_meanh(diff_sq, valid_mask, size);
+    Mat sq_mean    = get_feature_meanh(diff_sq, size);
 
-    cv::sqrt(sq_mean, roughness_map);
+    cv::sqrt(abs(sq_mean), roughness_map);
 
     return roughness_map;
 }
@@ -490,8 +500,8 @@ void Cloud_Matrix_Loador::get_feature_slope_bycloud(pcl::PointCloud<pcl::PointXY
 
     // float larger_r = map_resolution_ * 5;
     float smaller_r = map_resolution_ * 4;
-    if(smaller_r < 0.07)
-        smaller_r = 0.07;
+    if(smaller_r < 0.09)
+        smaller_r = 0.09;
 
     // normal_large = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, larger_r);
     normal_small = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, smaller_r);
@@ -509,7 +519,7 @@ void Cloud_Matrix_Loador::get_feature_slope_bycloud(pcl::PointCloud<pcl::PointXY
         slope_map_s_.ptr<float>(row)[col] = 1 - abs(normal_small->points[i].normal[2]);
     }
 
-    slope_map_l_ = get_feature_meanh(slope_map_s_, valid_mask, 5);
+    slope_map_l_ = get_feature_meanh(slope_map_s_, 5);
 }
 
 void Cloud_Matrix_Loador::get_feature_slope_byimgae(Mat img_height, Mat valid_mask)
@@ -548,32 +558,55 @@ void Cloud_Matrix_Loador::get_feature_slope_byimgae(Mat img_height, Mat valid_ma
     slope_map_s_ = sobel_s;
     slope_map_l_ = sobel_l;
     // resize(sobel_l, slope_map_l_, slope_map_l_.size(), 0, 0, INTER_NEAREST);
-    slope_map_l_ = get_feature_meanh(slope_map_s_, valid_mask, 5);
+    slope_map_l_ = get_feature_meanh(slope_map_s_, 5);
 
     cout << "finish slope" << endl;
 }
 
+Mat Cloud_Matrix_Loador::fill_missingvalue(Mat img)
+{
+    Mat missing_v_mask, temp, missing_v_mat, height_map_close;
+
+    Mat element = getStructuringElement(MORPH_RECT, Size(3,3));
+    morphologyEx(img, height_map_close, MORPH_DILATE, element);
+
+    Mat mean_mat = get_feature_meanh(height_map_close, 3);
+    missing_v_mat = get_feature_meanh(mean_mat, 11); 
+
+    threshold( mean_mat, missing_v_mask, 0, 1, THRESH_BINARY_INV );
+    multiply(missing_v_mat, missing_v_mask, temp);
+    Mat expended = temp + mean_mat;
+
+    return expended;
+}
 
 Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_all_prt, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground_prt)
 {
+    //////////  assign mean height to missing pixel /////////////////////
+    Mat mean_height = fill_missingvalue(height_map_);
+    //  Mat mean_height = get_feature_meanh(height_map_, 3);
+
+
 
     /////// compute maximum height difference ////////////////////
     Mat min, max, valid_mask;
     Mat element2 = getStructuringElement(MORPH_RECT, Size(3,3));
-    threshold( height_map_, valid_mask, 0, 1, THRESH_BINARY );
+    threshold( mean_height, valid_mask, 0, 1, THRESH_BINARY );
 
-    min = (1 - valid_mask) * 5 + height_map_;   // get min value for every pixel
+    min = (1 - valid_mask) * 5 + mean_height;   // get min value for every pixel
     morphologyEx(min, min, MORPH_ERODE, element2);
 
-    morphologyEx(height_map_, max, MORPH_DILATE, element2);  // get max value for every pixel
+    morphologyEx(mean_height, max, MORPH_DILATE, element2);  // get max value for every pixel
 
     Mat height_diff = (max - min); // get maximum height difference for every pixel
 
-    ////////// slope /////////////////////
-    Mat mean_mat = get_feature_meanh(height_map_, valid_mask, 5);
 
-    // get_feature_slope_byimgae(mean_mat, valid_mask);
+
+    //////////  slope  /////////////////////
+    // get_feature_slope_byimgae(mean_height, valid_mask);
     get_feature_slope_bycloud(cloud_all_prt, cloud_ground_prt, valid_mask);
+    slope_map_l_ = fill_missingvalue(slope_map_l_);
+    slope_map_s_ = fill_missingvalue(slope_map_s_);
 
     ////////// roughness /////////////////////
     Mat roughness_mat = get_feature_roughness(slope_map_l_, slope_map_s_, height_diff, valid_mask, 3);
@@ -583,30 +616,30 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
     resize(height_diff,   output_height_diff_, Size(), 0.33, 0.33, INTER_NEAREST);
     resize(slope_map_l_,  output_slope_,       Size(), 0.33, 0.33, INTER_NEAREST);
     resize(roughness_mat, output_roughness_,   Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(mean_mat,      output_height_,      Size(), 0.33, 0.33, INTER_NEAREST);
+    resize(mean_height,   output_height_,      Size(), 0.33, 0.33, INTER_NEAREST);
     resize(cost_map,      output_cost_,        Size(), 0.33, 0.33, INTER_NEAREST);
 
     output_height_ = output_height_ - map_height_/2;
 
-    Mat s_l   = rescaleMat(slope_map_l_);
-    Mat s_s   = rescaleMat(slope_map_s_);
-    // Mat m_h   = rescaleMat(mean_mat);
-    // // Mat s_s_m = rescaleMat(mean_slope_s);
-    // Mat r     = rescaleMat(roughness_mat);
-    // Mat d_min = rescaleMat(min);
-    // Mat d_max = rescaleMat(max);
+    // Mat s_l   = rescaleMat(slope_map_l_);
+    // Mat s_s   = rescaleMat(slope_map_s_);
+    // Mat m_h   = rescaleMat(mean_height);
+    // // // Mat s_s_m = rescaleMat(mean_slope_s);
+    // // Mat r     = rescaleMat(cost_map);
+    // // Mat d_min = rescaleMat(min);
+    // // Mat d_max = rescaleMat(max);
     // Mat d_diff = rescaleMat(height_diff);
 
-    // imshow("mean height", mean_mat);
-    imshow("s_l", s_l);
-    imshow("s_s", s_s);
-    // // imshow("s_s_m", s_s_m);
-    // // imshow("d_min", d_min);
+    // imshow("mean height", m_h);
+    // imshow("s_l", s_l);
+    // imshow("s_s", s_s);
+    // // // imshow("s_s_m", s_s_m);
+    // // // imshow("d_min", d_min);
     // // imshow("d_max", d_max);
-    // imshow("r", r);
-    // imshow("cost_map", cost_map);
+    // // imshow("r", r);
+    // imshow("d_diff", d_diff);
 
-    waitKey(50);
+    // waitKey(50);
 
 
     return cost_map;
