@@ -35,6 +35,10 @@ class Cloud_Matrix_Loador
     int     map_cols_;
     int     map_hs_;
 
+    float   map_resolution_output_;
+    int     map_rows_output_;
+    int     map_cols_output_;
+
     Mat     cloud_mat_; // 3D point space
     Mat     slope_map_l_, slope_map_s_, height_map_; // 2D feature space
 
@@ -97,15 +101,18 @@ Cloud_Matrix_Loador::~Cloud_Matrix_Loador()
 
 void Cloud_Matrix_Loador::init_params(float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution)
 {
-    map_width_          = map_width;
-    map_broad_          = map_broad;
-    map_height_         = map_height;
-    map_resolution_     = map_resolution/3;
-    map_h_resolution_   = map_h_resolution;
+    map_width_             = map_width;
+    map_broad_             = map_broad;
+    map_height_            = map_height;
+    map_resolution_        = map_resolution/3;
+    map_resolution_output_ = map_resolution;
+    map_h_resolution_      = map_h_resolution;
 
-    map_rows_           = map_width_/map_resolution_;
-    map_cols_           = map_broad_/map_resolution_;
-    map_hs_             = map_height_/map_h_resolution;
+    map_rows_              = std::ceil(map_width_/map_resolution_);
+    map_cols_              = std::ceil(map_broad_/map_resolution_);
+    map_rows_output_       = std::ceil(map_width_/map_resolution_output_);
+    map_cols_output_       = std::ceil(map_broad_/map_resolution_output_);
+    map_hs_                = std::ceil(map_height_/map_h_resolution);
 
     int sz[]  = {map_rows_, map_cols_, map_hs_};
     height_map_     = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
@@ -277,7 +284,7 @@ Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness, Mat 
 
             float cost = slope_v * 0.5 + roughness_v * 0.5;
         
-            if(height_diff > 0.4)
+            if(height_diff > 0.3)
             {
                 cost = 3.0;   // obstacle
             }    
@@ -500,8 +507,8 @@ void Cloud_Matrix_Loador::get_feature_slope_bycloud(pcl::PointCloud<pcl::PointXY
 
     // float larger_r = map_resolution_ * 5;
     float smaller_r = map_resolution_ * 4;
-    if(smaller_r < 0.09)
-        smaller_r = 0.09;
+    if(smaller_r < 0.10)
+        smaller_r = 0.10;
 
     // normal_large = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, larger_r);
     normal_small = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, smaller_r);
@@ -587,7 +594,6 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
     //  Mat mean_height = get_feature_meanh(height_map_, 3);
 
 
-
     /////// compute maximum height difference ////////////////////
     Mat min, max, valid_mask;
     Mat element2 = getStructuringElement(MORPH_RECT, Size(3,3));
@@ -601,23 +607,23 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
     Mat height_diff = (max - min); // get maximum height difference for every pixel
 
 
-
     //////////  slope  /////////////////////
     // get_feature_slope_byimgae(mean_height, valid_mask);
     get_feature_slope_bycloud(cloud_all_prt, cloud_ground_prt, valid_mask);
     slope_map_l_ = fill_missingvalue(slope_map_l_);
     slope_map_s_ = fill_missingvalue(slope_map_s_);
 
+
     ////////// roughness /////////////////////
     Mat roughness_mat = get_feature_roughness(slope_map_l_, slope_map_s_, height_diff, valid_mask, 3);
 
     Mat cost_map = compute_cost(height_diff, slope_map_l_, roughness_mat, valid_mask);
 
-    resize(height_diff,   output_height_diff_, Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(slope_map_l_,  output_slope_,       Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(roughness_mat, output_roughness_,   Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(mean_height,   output_height_,      Size(), 0.33, 0.33, INTER_NEAREST);
-    resize(cost_map,      output_cost_,        Size(), 0.33, 0.33, INTER_NEAREST);
+    resize(height_diff,   output_height_diff_, Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    resize(slope_map_l_,  output_slope_,       Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    resize(roughness_mat, output_roughness_,   Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    resize(mean_height,   output_height_,      Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    resize(cost_map,      output_cost_,        Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
 
     output_height_ = output_height_ - map_height_/2;
 

@@ -81,6 +81,8 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
     cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y);
     cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y);
 
+    cout << "map size: " << cost_map.cells_x << " " << cost_map.cells_y << endl;
+
     for(int row = 0; row < h_diff.rows; row ++)
     {
         for(int col = 0; col < h_diff.cols; col ++)
@@ -149,7 +151,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     float robot_x = to_target.getOrigin().x();
     float robot_y = to_target.getOrigin().y();
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 3, 3, 6, 0.025, 0.015);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 3, 3, 6, 0.05, 0.015);
     cloud_filtered1.header.frame_id = process_frame;
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.025, cost_map1, robot_x, robot_y);
 
@@ -168,7 +170,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
 
-    publish(pub_cloud, cloud_filtered2); // publishing colored points with defalt cost function
+    publish(pub_cloud, cloud_filtered1); // publishing colored points with defalt cost function
 
     pub_costmap1.publish(cost_map1);
     pub_costmap2.publish(cost_map2);
