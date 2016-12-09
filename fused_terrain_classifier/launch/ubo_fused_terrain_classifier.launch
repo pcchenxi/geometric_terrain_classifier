@@ -1,0 +1,15 @@
+<!--  UBO Slam: /mapping_nodelet/pointcloud_downsampled    
+      UBO new dataset 1:/mapping_nodelet/pointcloud
+      UBO new dataset 2:/scan_assembler_nodelet/assembled_cloud
+      NDT slam: /ndt_map-->
+<launch>
+
+  <node pkg="fused_terrain_classifier" type="fused_classifier" name="fused_classifier" output="screen">
+
+<!--     <remap from="/points_raw" to="/surfel_map/pointcloud" /> -->
+     <remap from="/points_raw" to="/mapping_nodelet/pointcloud_downsampled" />
+     <remap from="/image_seg" to="/image/label_output" />
+
+  </node>
+  
+</launch>
