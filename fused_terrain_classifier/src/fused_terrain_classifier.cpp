@@ -154,7 +154,7 @@ void process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
     tf::StampedTransform to_target;
     try 
     {
-        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, cloud_in.header.stamp, to_target);
+        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, image_msg->header.stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
