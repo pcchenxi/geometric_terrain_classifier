@@ -305,9 +305,9 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
                 // map_label.at<Vec3b>(row, col) = label_cost;
-                ground_cloud.points[i].r = label_cost;
-                ground_cloud.points[i].g = label_cost;
-                ground_cloud.points[i].b = label_cost;
+                ground_cloud.points[i].r = label_cost * 100;
+                ground_cloud.points[i].g = label_cost * 100;
+                ground_cloud.points[i].b = label_cost * 100;
             }    
 
         }
