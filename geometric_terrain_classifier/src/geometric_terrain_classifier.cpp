@@ -80,6 +80,7 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
     cost_map.height_diff.resize(cost_map.cells_x * cost_map.cells_y);
     cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y);
     cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y);
+    cost_map.semantic_cost.resize(cost_map.cells_x * cost_map.cells_y);
 
     cout << "map size: " << cost_map.cells_x << " " << cost_map.cells_y << endl;
 
@@ -153,7 +154,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.2, 0.015);
     cloud_filtered1.header.frame_id = process_frame;
-    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.025, cost_map1, robot_x, robot_y);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.2, cost_map1, robot_x, robot_y);
 
     // pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered2 = cml->process_cloud(pcl_cloud, 25, 25, 6, 0.15, 0.01);
     // cloud_filtered2.header.frame_id = process_frame;
