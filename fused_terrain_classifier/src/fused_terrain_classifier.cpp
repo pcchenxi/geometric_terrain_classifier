@@ -225,7 +225,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> ground_cloud, float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
-    string camera_frame = "kinect2_rgb_optical_frame_tune";
+    string camera_frame = "kinect2_rgb_optical_frame";
     // string camera_frame = image_msg->header.frame_id;
     pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
 
@@ -305,9 +305,9 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
                 // map_label.at<Vec3b>(row, col) = label_cost;
-                // ground_cloud.points[i].r = label_cost;
-                // ground_cloud.points[i].g = label_cost;
-                // ground_cloud.points[i].b = label_cost;
+                ground_cloud.points[i].r = label_cost;
+                ground_cloud.points[i].g = label_cost;
+                ground_cloud.points[i].b = label_cost;
             }    
 
         }
