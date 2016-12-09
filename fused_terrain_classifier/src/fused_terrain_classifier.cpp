@@ -222,7 +222,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     return uv_rect;
   }
 
-Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> ground_cloud, float map_width, float map_broad, float map_resolution)
+Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
     string camera_frame = "kinect2_rgb_optical_frame";
