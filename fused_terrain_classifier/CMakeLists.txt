@@ -6,8 +6,8 @@ project(fused_terrain_classifier)
 ## is used, also find other catkin packages
 find_package(PCL 1.7 REQUIRED COMPONENTS)
 find_package(OpenCV 2.4 REQUIRED)
-#find_package(self_labeller REQUIRED)
-#MESSAGE( STATUS "variable is: " ${self_labeller_INCLUDE_DIRS} )
+find_package(geometric_terrain_classifier REQUIRED)
+MESSAGE( STATUS "variable is: " ${geometric_terrain_classifier_DIR} )
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -32,7 +32,7 @@ catkin_package(
 )
 
 include_directories(
-  /home/xi/workspace/catkin_rcv/src/geometric_terrain_classifier/terrain_classifier/include
+ /home/xi/workspace/catkin_rcv/src/kth_terrain_classifier/geometric_terrain_classifier/include
  # ${geometric_terrain_classifier_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
