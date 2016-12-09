@@ -10,6 +10,7 @@
 
 
 tf::TransformListener* tfListener = NULL;
+sensor_msgs::PointCloud2 cloud_recieved_map_;
 Cloud_Matrix_Loador* cml;
 
 ros::Publisher  pub_cloud, pub_costmap1, pub_costmap2, pub_costmap3;
@@ -18,6 +19,7 @@ ros::Publisher  pub_cloud, pub_costmap1, pub_costmap2, pub_costmap3;
 pcl::PointCloud<pcl::PointXYZRGB> ground_cloud1_, ground_cloud2_, ground_cloud3_;
 centauro_costmap::CostMap cost_map1_, cost_map2_, cost_map3_;
 
+string map_frame = "map";
 string output_frame = "map";
 string process_frame = "base_link_oriented";
 
@@ -51,7 +53,7 @@ void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZRGB> cloud, int ty
     pub.publish(pointlcoud2);
 }
 
-sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, string frame_target)
+sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, string frame_target, ros::Time stamp)
 {
     ////////////////////////////////// transform ////////////////////////////////////////
     sensor_msgs::PointCloud2 cloud_out;
@@ -61,7 +63,7 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
     {
         // tf_listener_->waitForTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, ros::Duration(1.0));
         // tf_listener_->lookupTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, to_target);
-        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, cloud_in.header.stamp, to_target);
+        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
@@ -138,10 +140,11 @@ void set_output_frame(string output_frame, ros::Time stamp)
     ground_cloud3_.header.frame_id = output_frame;
 }
 
-void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
+
+void process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageConstPtr& image_msg)
 {
     cout << "cloud recieved: " << ros::Time::now() << endl;
-    sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(*cloud_in, process_frame);
+    sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(cloud_in, process_frame, image_msg->header.stamp);
     pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
     pcl::fromROSMsg(cloud_transformed, pcl_cloud);
 
@@ -151,7 +154,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     tf::StampedTransform to_target;
     try 
     {
-        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, cloud_in->header.stamp, to_target);
+        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, cloud_in.header.stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
@@ -186,7 +189,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     pcl::transformPointCloud (ground_cloud2_, ground_cloud2_, eigen_transform);
     pcl::transformPointCloud (ground_cloud3_, ground_cloud3_, eigen_transform);
 
-    set_output_frame(output_frame, cloud_in->header.stamp);
+    set_output_frame(output_frame, image_msg->header.stamp);
 
     cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
 
@@ -194,10 +197,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     // pub_costmap1.publish(cost_map1);
     // pub_costmap2.publish(cost_map2);
-    // pub_costmap3.publish(cost_map3);
-
-    initialized = true;
-    
+    // pub_costmap3.publish(cost_map3);    
 }
 
   cv::Point2d project3D_to_image(cv::Point3d& xyz, string frame_id )
@@ -323,11 +323,18 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
     return map_label; 
 }
 
+void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
+{
+    cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, cloud_in->header.stamp);
+    initialized = true;
+}
 
 void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
 {
     if(!initialized)
         return; 
+
+    process_cloud(cloud_recieved_map_, image_msg);
 
     cout << "in image call back" << endl;
     Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.2);
