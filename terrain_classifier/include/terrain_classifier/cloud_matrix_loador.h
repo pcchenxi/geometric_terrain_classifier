@@ -45,6 +45,8 @@ class Cloud_Matrix_Loador
     public:
     Mat     output_height_diff_, output_slope_, output_roughness_, output_height_, output_cost_;
 
+    float   max_roughness_;
+
     const float* mat_ptr;
     const float* slope_l_ptr;
     const float* slope_s_ptr;
@@ -114,12 +116,14 @@ void Cloud_Matrix_Loador::init_params(float map_width, float map_broad, float ma
     map_cols_output_       = std::ceil(map_broad_/map_resolution_output_);
     map_hs_                = std::ceil(map_height_/map_h_resolution);
 
-    int sz[]  = {map_rows_, map_cols_, map_hs_};
-    height_map_     = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
-    slope_map_l_    = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
-    slope_map_s_    = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
+    int sz[]               = {map_rows_, map_cols_, map_hs_};
+    height_map_            = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
+    slope_map_l_           = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
+    slope_map_s_           = Mat(map_rows_, map_cols_, CV_32FC1,  Scalar(0));
     
-    cloud_mat_      = Mat(3, sz, CV_32FC1,  Scalar(0.0));
+    cloud_mat_             = Mat(3, sz, CV_32FC1,  Scalar(0.0));
+
+    max_roughness_         = 0;
 
 }
 
@@ -218,6 +222,10 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         int row     = point.y / map_resolution_;
         col         = map_cols_ - col;
 
+        int hit     = point.z / map_h_resolution_;
+        // if(hit >= map_hs_ || row >= map_rows_ || col >= map_cols_ || hit < 0 || row < 0 || col < 0)
+        //     continue;
+
         float cost = cost_map.ptr<float>(row)[col];
 
         // float max = 1;
@@ -228,27 +236,52 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         float cost_obs = 3;
         float cost_rough = 2;
         float cost_flat = 1;
+  
         if(cost == cost_obs)
         {
             cloud_color.points[i].r = 200;
         }    
-        else if(cost == cost_rough)
+        // else if(cost == cost_rough)
+        // {
+        //     cloud_color.points[i].r = 100.0;
+        //     cloud_color.points[i].g = 255.0;
+        //     cloud_color.points[i].b = 0.0;
+        // }   
+        // else if(cost == cost_flat)
+        // {
+        //     cloud_color.points[i].r = 0.0;
+        //     cloud_color.points[i].g = 0.0;
+        //     cloud_color.points[i].b = 255.0;
+        // }  
+        // else if(cost == -1)
+        // {
+        //     cloud_color.points[i].r = 0.0;
+        //     cloud_color.points[i].g = 255.0;
+        //     cloud_color.points[i].b = 255.0;
+        // }
+        else  // for testing cost values
         {
-            cloud_color.points[i].r = 100.0;
-            cloud_color.points[i].g = 255.0;
-            cloud_color.points[i].b = 0.0;
-        }   
-        else if(cost == cost_flat)
-        {
-            cloud_color.points[i].r = 0.0;
-            cloud_color.points[i].g = 0.0;
-            cloud_color.points[i].b = 255.0;
-        }  
-        else if(cost == -1)
-        {
-            cloud_color.points[i].r = 0.0;
-            cloud_color.points[i].g = 255.0;
-            cloud_color.points[i].b = 255.0;
+            float theshold_1 = 0.01;
+            float theshold_2 = 0.2;
+
+            if(cost < theshold_1)
+            {
+                cloud_color.points[i].r = 0.0;
+                cloud_color.points[i].g = 255.0/theshold_1 * cost;
+                cloud_color.points[i].b = 0.0; 
+            }
+            else if(cost < theshold_2)
+            {
+                cloud_color.points[i].r = 255.0/theshold_2 * cost;
+                cloud_color.points[i].g = 255.0;
+                cloud_color.points[i].b = 0.0; 
+            }
+            else
+            {
+                cloud_color.points[i].r = 255.0;
+                cloud_color.points[i].g = 255.0;
+                cloud_color.points[i].b = 255.0 * cost; 
+            }
         }
     }
 
@@ -282,16 +315,20 @@ Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness, Mat 
             // if(slope_v != slope_v)
             //     cout << "slope NAN !" << endl;
 
-            float cost = slope_v * 0.5 + roughness_v * 0.5;
+            float cost = slope_v * 0.0 + roughness_v * 1.0;
+
+            if(cost > max_roughness_)
+                max_roughness_ = cost;
+
         
-            if(height_diff > 0.3)
+            if(height_diff > 0.25)
             {
                 cost = 3.0;   // obstacle
             }    
-            else if(cost > 0.02)
-                cost = 2.0;  // rough
+            // else if(cost > 0.03)
+            //     cost = 2.0;  // rough
             else 
-                cost = 1.0;  // flat
+                cost = cost;  // flat
 
             cost_map.at<float>(row, col) = cost;
 
@@ -320,6 +357,8 @@ void Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float
     for(size_t i = 0; i < cloud.points.size(); i=i+1)
     {
         pcl::PointXYZ point = cloud.points[i];
+        if(point.z > 1.0)
+            continue;
 
         point.x     += map_width_/2;
         point.y     += map_broad_/2;
@@ -375,7 +414,8 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::process_cloud(pcl::PointC
     ros::Time t4 = ros::Time::now();
     cout << t4 - t3 << " ------------------ computed features: "  << endl;
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_color = reformCloud(ground_points_, cost_map);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_color = reformCloud(ground_points_, cost_map); // only color ground points
+    // pcl::PointCloud<pcl::PointXYZRGB> cloud_color = reformCloud(cloud, cost_map); // color all points
     
     ros::Time t5 = ros::Time::now();
     cout << t5 - t4 << " ------------------finished reformCloud: "  << cloud_color.points.size() << endl;
@@ -619,6 +659,8 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
 
     Mat cost_map = compute_cost(height_diff, slope_map_l_, roughness_mat, valid_mask);
 
+    cout << "maximum cost --------  " << max_roughness_ << endl;
+
     resize(height_diff,   output_height_diff_, Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
     resize(slope_map_l_,  output_slope_,       Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
     resize(roughness_mat, output_roughness_,   Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
@@ -629,7 +671,7 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
 
     // Mat s_l   = rescaleMat(slope_map_l_);
     // Mat s_s   = rescaleMat(slope_map_s_);
-    // Mat m_h   = rescaleMat(mean_height);
+    // Mat m_h   = rescaleMat(output_height_);
     // // // Mat s_s_m = rescaleMat(mean_slope_s);
     // // Mat r     = rescaleMat(cost_map);
     // // Mat d_min = rescaleMat(min);

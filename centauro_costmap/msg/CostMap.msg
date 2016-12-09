@@ -16,3 +16,4 @@ float32[] height
 float32[] height_diff
 float32[] slope
 float32[] roughness
+float32[] semantic_cost
