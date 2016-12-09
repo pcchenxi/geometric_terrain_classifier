@@ -25,7 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  INCLUDE_DIRS include
+#  INCLUDE_DIRS include
 #  LIBRARIES pluto_costmap_generator
 #  CATKIN_DEPENDS pcl_ros roscpp rospy sensor_msgs std_msgs tf
 #  DEPENDS system_lib
