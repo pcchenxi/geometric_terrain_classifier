@@ -3,6 +3,7 @@
 #include <sensor_msgs/point_cloud_conversion.h>
 
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 #include <pcl_ros/transforms.h>
 
 #include <centauro_costmap/CostMap.h>
@@ -240,7 +241,13 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         return map_label;
     
     try {
-        img_seg = cv_bridge::toCvShare(image_msg, "32FC1")->image;
+        /////////////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////  convert and scale the image //////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////////////
+
+        Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
+        resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
+
         // imshow("img_seg", img_seg);
         // waitKey(50);
 
@@ -286,7 +293,12 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         if(uv.x >= 0 && uv.x < img_seg.cols && uv.y >= 0 && uv.y < img_seg.rows)
         {
             // cout << "projected uv: "<< uv.x << " " << uv.y << endl;
-            float label_cost = img_seg.at<float>(uv.y, uv.x);
+
+            /////////////////////////////////////////////////////////////////////////////////////////////////
+            ///////////////////////////////// reading label value from img_seg //////////////////////////////
+            /////////////////////////////////////////////////////////////////////////////////////////////////
+
+            float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
             // Vec3b label_cost = img_seg.at<Vec3b>(uv.y, uv.x);
 
             // compute index on the map
@@ -300,8 +312,13 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
             // cout << "map: " << row << " " << col << endl;
             if(col >= 0 && col < map_label.cols && row >= 0 && row < map_label.rows)
             {
-                // cout << "label value: " << label_cost << endl;
-                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost), -1);  
+                /////////////////////////////////////////////////////////////////////////////////////////////////
+                ///////////////////////////////// writing label value to map_label //////////////////////////////
+                /////////////////////////////////////////////////////////////////////////////////////////////////
+
+                cout << "label value: " << label_cost << endl;
+                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2.0), -1);  
+
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
                 // map_label.at<Vec3b>(row, col) = label_cost;
@@ -325,12 +342,20 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
 void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
+    cout << "cloud in " << endl;
     cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, cloud_in->header.stamp);
     initialized = true;
 }
 
 void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
 {
+    cout << "compressed image" << endl;
+    // Mat img_comp = cv_bridge::toCvShare(image_msg, "bgr8")->image;
+    // resize(img_comp, img_comp, Size(1920, 1080), 0, 0, INTER_NEAREST);
+    // imshow("compressed_img", img_comp);
+    // waitKey(50);
+    // return;
+
     if(!initialized)
         return; 
 
@@ -347,7 +372,7 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
         {
             float semantic_v = label_map.ptr<float>(row)[col];
 
-             int index = row * label_map.rows + col;
+            int index = row * label_map.rows + col;
 
             if(semantic_v == -1)
                 cost_map1_.semantic_cost[index] = std::numeric_limits<float>::quiet_NaN();
@@ -376,7 +401,11 @@ int main(int argc, char** argv)
     tfListener = new (tf::TransformListener);
 
     ros::Subscriber sub_cloud     = node.subscribe<sensor_msgs::PointCloud2>("/points_raw", 1, callback_cloud);
-    ros::Subscriber sub_image_seg = node.subscribe<sensor_msgs::Image>("/image_seg", 1, imageCallback_seg);
+
+    image_transport::ImageTransport it(node);
+    image_transport::Subscriber sub_raw = it.subscribe("/image_seg", 1, imageCallback_seg);
+
+    // ros::Subscriber sub_image_seg = node.subscribe<sensor_msgs::Image>("/image_seg", 1, imageCallback_seg);
 
     // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
     pub_cloud      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered", 1);

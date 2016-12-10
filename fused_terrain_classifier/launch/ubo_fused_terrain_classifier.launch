@@ -7,8 +7,11 @@
   <node pkg="fused_terrain_classifier" type="fused_classifier" name="fused_classifier" output="screen">
 
 <!--     <remap from="/points_raw" to="/surfel_map/pointcloud" /> -->
+     <param name="image_transport" value="compressed" />
+
      <remap from="/points_raw" to="/mapping_nodelet/pointcloud_downsampled" />
-     <remap from="/image_seg" to="/image/label_output" />
+     <remap from="/image_seg/compressed" to="/image/label_output/compressed" />
+<!--  <remap from="/image_seg/compressed" to="/camera_right_hand/image_raw/compressed" />  -->
 
   </node>
   
