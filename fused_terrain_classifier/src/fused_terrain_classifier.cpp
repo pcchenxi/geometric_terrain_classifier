@@ -316,7 +316,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 ///////////////////////////////// writing label value to map_label //////////////////////////////
                 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-                cout << "label value: " << label_cost << endl;
+                // cout << "label value: " << label_cost << endl;
                 cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2.0), -1);  
 
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
