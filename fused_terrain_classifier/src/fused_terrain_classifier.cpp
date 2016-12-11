@@ -69,7 +69,10 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
     catch (tf::TransformException& ex) 
     {
         ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
-        // return cloud_in;
+        cloud_in.height = 0;
+        cloud_in.width = 0;
+
+        return cloud_in;
     }
 
     Eigen::Matrix4f eigen_transform;
@@ -142,10 +145,13 @@ void set_output_frame(string output_frame, ros::Time stamp)
 }
 
 
-void process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageConstPtr& image_msg)
+bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageConstPtr& image_msg)
 {
     cout << "cloud recieved: " << ros::Time::now() << endl;
     sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(cloud_in, process_frame, image_msg->header.stamp);
+    if(cloud_transformed.height == 0 && cloud_transformed.width == 0)
+        return 0;
+
     pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
     pcl::fromROSMsg(cloud_transformed, pcl_cloud);
 
@@ -159,8 +165,8 @@ void process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
     }
     catch (tf::TransformException& ex) 
     {
-        ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
-        return;
+        ROS_WARN("TF exception:\n%s", ex.what());
+        return 0;
     }
 
     // process cloud
@@ -194,6 +200,7 @@ void process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
 
     cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
 
+    return 1;
     // publish(pub_cloud, ground_cloud2_); // publishing colored points with defalt cost function
 
     // pub_costmap1.publish(cost_map1);
@@ -344,9 +351,13 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
     cout << "cloud in " << endl;
     cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, cloud_in->header.stamp);
+    if(cloud_recieved_map_.height == 0 && cloud_recieved_map_.width == 0)
+        initialized = false;
+    else
+        initialized = true;
+    // cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, ros::Time(0));
     // cout << "points number:  " << cloud_recieved_map_.points.size() << endl;
 
-    initialized = true;
 }
 
 void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
@@ -361,7 +372,8 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
     if(!initialized)
         return; 
 
-    process_cloud(cloud_recieved_map_, image_msg);
+    if(!process_cloud(cloud_recieved_map_, image_msg))
+        return; 
 
     cout << "in image call back" << endl;
     Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.2);
