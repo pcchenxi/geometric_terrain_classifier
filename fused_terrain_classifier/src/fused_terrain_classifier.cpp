@@ -20,9 +20,11 @@ ros::Publisher  pub_cloud, pub_costmap1, pub_costmap2, pub_costmap3;
 pcl::PointCloud<pcl::PointXYZRGB> ground_cloud1_, ground_cloud2_, ground_cloud3_;
 centauro_costmap::CostMap cost_map1_, cost_map2_, cost_map3_;
 
+float robot_x_, robot_y_;
+
 string map_frame = "map";
-string output_frame = "map";
-string process_frame = "base_link_oriented";
+string output_frame = "base_link_oriented";
+string process_frame = "map";
 
 bool initialized = false;
 
@@ -161,7 +163,7 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
     tf::StampedTransform to_target;
     try 
     {
-        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, image_msg->header.stamp, to_target);
+        tfListener->lookupTransform("map", "ego_rot", image_msg->header.stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
@@ -171,30 +173,30 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
 
     // process cloud
 
-    float robot_x = to_target.getOrigin().x();
-    float robot_y = to_target.getOrigin().y();
+    robot_x_ = to_target.getOrigin().x();
+    robot_y_ = to_target.getOrigin().y();
 
-    ground_cloud1_ = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.1, 0.015);
+    ground_cloud1_ = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.05, 0.015, robot_x_, robot_y_);
     ground_cloud1_.header.frame_id = process_frame;
-    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.1, cost_map1_, robot_x, robot_y);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.05, cost_map1_, robot_x_, robot_y_);
 
     // ground_cloud2_ = cml->process_cloud(pcl_cloud, 5, 5, 6, 0.01, 0.015);
     // ground_cloud2_.header.frame_id = process_frame;
-    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.05, cost_map2_, robot_x, robot_y);
+    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.05, cost_map2_, robot_x_, robot_y_);
 
 
     // ground_cloud3_ = cml->process_cloud(pcl_cloud, 30, 30, 6, 1.0, 0.015);
     // ground_cloud3_.header.frame_id = process_frame;
-    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 1.0, cost_map3_, robot_x, robot_y);
+    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 1.0, cost_map3_, robot_x_, robot_y_);
 
-    cout << "robot position : " << robot_x << " " << robot_y << endl;
+    cout << "robot position : " << robot_x_ << " " << robot_y_ << endl;
 
     // transform point back to map frame
-    Eigen::Matrix4f eigen_transform;
-    pcl_ros::transformAsMatrix (to_target, eigen_transform);
-    pcl::transformPointCloud (ground_cloud1_, ground_cloud1_, eigen_transform);
-    pcl::transformPointCloud (ground_cloud2_, ground_cloud2_, eigen_transform);
-    pcl::transformPointCloud (ground_cloud3_, ground_cloud3_, eigen_transform);
+    //Eigen::Matrix4f eigen_transform;
+    //pcl_ros::transformAsMatrix (to_target, eigen_transform);
+    //pcl::transformPointCloud (ground_cloud1_, ground_cloud1_, eigen_transform);
+    //pcl::transformPointCloud (ground_cloud2_, ground_cloud2_, eigen_transform);
+    //pcl::transformPointCloud (ground_cloud3_, ground_cloud3_, eigen_transform);
 
     set_output_frame(output_frame, image_msg->header.stamp);
 
@@ -216,11 +218,11 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
     //   fy = 526.9663404399863;
     //   cx = 477.4416333879422;
     //   cy = 261.8692914553029;
-
-    fx = 1060.707250708333;
-    fy = 1058.608326305465;
-    cx = 956.354471815484;
-    cy = 518.9784429882449;
+	
+    fx = 1090.0084356403304;
+    fy = 1093.4799569173076;
+    cx = 944.9003536394688;
+    cy = 527.4736145938574;
 
     cv::Point2d uv_rect;
     uv_rect.x = (fx*xyz.x) / xyz.z + cx;
@@ -255,8 +257,8 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
         resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
 
-        // imshow("img_seg", img_seg);
-        // waitKey(50);
+       // imshow("img_seg", img_seg*100);
+       // waitKey(50);
 
         tf::StampedTransform to_camera;
         Eigen::Matrix4f eigen_transform_tocamera;
@@ -265,12 +267,17 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         pcl_ros::transformAsMatrix (to_camera, eigen_transform_tocamera);
         pcl::transformPointCloud (ground_cloud, ground_cloud_camera, eigen_transform_tocamera);
 
-        tf::StampedTransform to_base;
-        Eigen::Matrix4f eigen_transform_tobase;
-        tfListener->waitForTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, ros::Duration(0.15));
-        tfListener->lookupTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, to_base);
-        pcl_ros::transformAsMatrix (to_base, eigen_transform_tobase);
-        pcl::transformPointCloud (ground_cloud, ground_cloud_base, eigen_transform_tobase);
+       // tf::StampedTransform to_base;
+       // Eigen::Matrix4f eigen_transform_tobase;
+       // tfListener->waitForTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, ros::Duration(0.15));
+       // tfListener->lookupTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, to_base);
+       // pcl_ros::transformAsMatrix (to_base, eigen_transform_tobase);
+       // pcl::transformPointCloud (ground_cloud, ground_cloud_base, eigen_transform_tobase);
+		for(int i = 0; i < ground_cloud.points.size(); i++)
+		{
+			ground_cloud_base.points[i].x = ground_cloud.points[i].x - robot_x_;
+			ground_cloud_base.points[i].y = ground_cloud.points[i].z - robot_y_;
+		}
     }
     catch (cv_bridge::Exception& ex){
         cout << ex.what() << endl;
@@ -297,7 +304,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         // cout << "projected uv: "<< uv.x << " " << uv.y << endl;
 
         // check is the projected point inside image range
-        if(uv.x >= 0 && uv.x < img_seg.cols && uv.y >= 0 && uv.y < img_seg.rows)
+        if(uv.x >= 100 && uv.x < img_seg.cols -100 && uv.y >= 100 && uv.y < img_seg.rows-100)
         {
             // cout << "projected uv: "<< uv.x << " " << uv.y << endl;
 
@@ -324,7 +331,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 /////////////////////////////////////////////////////////////////////////////////////////////////
 
                 // cout << "label value: " << label_cost << endl;
-                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2.0), -1);  
+                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2), -1);  
 
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
@@ -337,9 +344,9 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         }
     } 
 
-    // imshow("map_label", map_label);
+   // imshow("map_label", map_label);
 
-    // waitKey(50);
+   // waitKey(50);
 
     cout << "projection finished" << endl;
     // ground_cloud_camera.header.frame_id = camera_frame;
@@ -376,7 +383,7 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
         return; 
 
     cout << "in image call back" << endl;
-    Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.1);
+    Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.05);
 
     // cout << "map: " << cost_map1_.cells_x << " " << cost_map1_.cells_y << endl;
     // cout << "image:  " << label_map.cols << " " << label_map.rows << endl;

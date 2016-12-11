@@ -130,7 +130,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     tf::StampedTransform to_target;
     try 
     {
-        tfListener->lookupTransform(output_frame, pcl_cloud.header.frame_id, cloud_in->header.stamp, to_target);
+        tfListener->lookupTransform("map", "ego_rot", cloud_in->header.stamp, to_target);
     }
     catch (tf::TransformException& ex) 
     {
@@ -149,10 +149,11 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
     cost_map2.header.stamp = cloud_in->header.stamp;
     cost_map3.header.stamp = cloud_in->header.stamp; 
 
-    float robot_x = to_target.getOrigin().x();
-    float robot_y = to_target.getOrigin().y();
+    float robot_x = -to_target.getOrigin().x();
+    float robot_y = -to_target.getOrigin().y();
+	cout << "test.." << endl;
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.1, 0.015);
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_filtered1 = cml->process_cloud(pcl_cloud, 12.0, 12.0, 6.0, 0.1, 0.015, robot_x, robot_y);
     cloud_filtered1.header.frame_id = process_frame;
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.2, cost_map1, robot_x, robot_y);
 

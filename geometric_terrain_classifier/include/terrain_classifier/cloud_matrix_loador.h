@@ -64,7 +64,7 @@ class Cloud_Matrix_Loador
 
     void load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution);
     pcl::PointCloud<pcl::PointXYZRGB> process_cloud    (pcl::PointCloud<pcl::PointXYZ> cloud, 
-                                                        float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution);
+                                                        float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution, float robot_x, float robot_y);
     pcl::PointCloud<pcl::PointXYZ>    cloud_filter     (pcl::PointCloud<pcl::PointXYZ> cloud);
     pcl::PointCloud<pcl::PointXYZRGB> reformCloud      (pcl::PointCloud<pcl::PointXYZ> cloud, Mat cost_map);
     pcl::PointCloud<pcl::Normal>::Ptr calculateSurfaceNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr input_point,
@@ -244,7 +244,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         // else if(cost == cost_rough)
         // {
         //     cloud_color.points[i].r = 100.0;
-        //     cloud_color.points[i].g = 255.0;
+        //     cloud_color.points[i].g = 255.0;process_cloud
         //     cloud_color.points[i].b = 0.0;
         // }   
         // else if(cost == cost_flat)
@@ -255,7 +255,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         // }  
         // else if(cost == -1)
         // {
-        //     cloud_color.points[i].r = 0.0;
+        //     cloud_color.points[i].r = 0.0;process_cloud
         //     cloud_color.points[i].g = 255.0;
         //     cloud_color.points[i].b = 255.0;
         // }
@@ -396,8 +396,14 @@ void Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float
 }
 
 pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::process_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, 
-                        float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution)
+                        float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution, float robot_x, float robot_y)
 {
+	for(int i = 0; i < cloud.points.size(); i++)
+	{
+		cloud.points[i].x -= robot_x;
+		cloud.points[i].y -= robot_y;
+	}
+	
     ros::Time begin = ros::Time::now();
 
     load_cloud(cloud, map_width, map_broad, map_height, map_resolution, map_h_resolution);
@@ -420,6 +426,12 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::process_cloud(pcl::PointC
     ros::Time t5 = ros::Time::now();
     cout << t5 - t4 << " ------------------finished reformCloud: "  << cloud_color.points.size() << endl;
 
+	for(int i = 0; i < cloud_color.points.size(); i++)
+	{
+		cloud_color.points[i].x += robot_x;
+		cloud_color.points[i].y += robot_y;
+	}
+	
     // pcl::PointCloud<pcl::PointXYZRGB> cloud_color;
     // return cloud_color;
     return cloud_color;
