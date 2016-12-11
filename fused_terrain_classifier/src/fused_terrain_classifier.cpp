@@ -174,9 +174,9 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
     float robot_x = to_target.getOrigin().x();
     float robot_y = to_target.getOrigin().y();
 
-    ground_cloud1_ = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.2, 0.015);
+    ground_cloud1_ = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.1, 0.015);
     ground_cloud1_.header.frame_id = process_frame;
-    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.2, cost_map1_, robot_x, robot_y);
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.1, cost_map1_, robot_x, robot_y);
 
     // ground_cloud2_ = cml->process_cloud(pcl_cloud, 5, 5, 6, 0.01, 0.015);
     // ground_cloud2_.header.frame_id = process_frame;
@@ -233,7 +233,7 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
 Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
-    string camera_frame = "kinect2_rgb_optical_frame";
+    string camera_frame = "kinect2_rgb_optical_frame_tune";
     // string camera_frame = image_msg->header.frame_id;
     pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
 
@@ -376,7 +376,7 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
         return; 
 
     cout << "in image call back" << endl;
-    Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.2);
+    Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.1);
 
     // cout << "map: " << cost_map1_.cells_x << " " << cost_map1_.cells_y << endl;
     // cout << "image:  " << label_map.cols << " " << label_map.rows << endl;
