@@ -141,9 +141,9 @@ void set_output_frame(string output_frame, ros::Time stamp)
     cost_map2_.header.stamp = stamp;
     cost_map3_.header.stamp = stamp; 
 
-    ground_cloud1_.header.frame_id = output_frame;
-    ground_cloud2_.header.frame_id = output_frame;
-    ground_cloud3_.header.frame_id = output_frame;
+    // ground_cloud1_.header.frame_id = output_frame;
+    // ground_cloud2_.header.frame_id = output_frame;
+    // ground_cloud3_.header.frame_id = output_frame;
 }
 
 
