@@ -344,6 +344,8 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
     cout << "cloud in " << endl;
     cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, cloud_in->header.stamp);
+    cout << "points number:  " << cloud_recieved_map_.points.size() << endl;
+
     initialized = true;
 }
 
