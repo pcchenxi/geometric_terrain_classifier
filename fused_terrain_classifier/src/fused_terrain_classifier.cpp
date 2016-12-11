@@ -233,7 +233,7 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
 Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
-    string camera_frame = "kinect2_rgb_optical_frame_tune";
+    string camera_frame = "kinect2_rgb_optical_frame";
     // string camera_frame = image_msg->header.frame_id;
     pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
 
