@@ -240,7 +240,6 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
     pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
 
     Mat img_seg;
-    Mat image_test = img_seg.clone();
     int img_rows = std::ceil(map_width/map_resolution);
     int img_cols = std::ceil(map_broad/map_resolution);
     Mat map_label = Mat(img_rows, img_cols, CV_32FC1,  Scalar(-1));
@@ -248,17 +247,19 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
     if(ground_cloud.points.size() == 0)
         return map_label;
-    
+    cout << "convert image" << endl;
     try {
         /////////////////////////////////////////////////////////////////////////////////////////////////
         /////////////////////////////////  convert and scale the image //////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
-        Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
+        // Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
+        Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "bgr8")->image;
         resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
 
        // imshow("img_seg", img_seg*100);
        // waitKey(50);
+       cout << "converted image" << endl;
 
         tf::StampedTransform to_camera;
         Eigen::Matrix4f eigen_transform_tocamera;
@@ -267,6 +268,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         pcl_ros::transformAsMatrix (to_camera, eigen_transform_tocamera);
         pcl::transformPointCloud (ground_cloud, ground_cloud_camera, eigen_transform_tocamera);
 
+        cout << "transformed cloud to camera " << ground_cloud.points.size() << endl;
        // tf::StampedTransform to_base;
        // Eigen::Matrix4f eigen_transform_tobase;
        // tfListener->waitForTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, ros::Duration(0.15));
@@ -275,9 +277,14 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
        // pcl::transformPointCloud (ground_cloud, ground_cloud_base, eigen_transform_tobase);
 		for(int i = 0; i < ground_cloud.points.size(); i++)
 		{
-			ground_cloud_base.points[i].x = ground_cloud.points[i].x - robot_x_;
-			ground_cloud_base.points[i].y = ground_cloud.points[i].z - robot_y_;
+            pcl::PointXYZRGB point = ground_cloud.points[i];
+            point.x -= robot_x_;
+            point.y -= robot_y_;
+            ground_cloud_base.points.push_back(point);
+			// ground_cloud_base.points[i].x = ground_cloud.points[i].x - robot_x_;
+			// ground_cloud_base.points[i].y = ground_cloud.points[i].y - robot_y_;
 		}
+        cout << "transformed cloud to base" << endl;
     }
     catch (cv_bridge::Exception& ex){
         cout << ex.what() << endl;
@@ -306,14 +313,15 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         // check is the projected point inside image range
         if(uv.x >= 100 && uv.x < img_seg.cols -100 && uv.y >= 100 && uv.y < img_seg.rows-100)
         {
-            // cout << "projected uv: "<< uv.x << " " << uv.y << endl;
+            cout << "projected uv: "<< uv.x << " " << uv.y << endl;
 
             /////////////////////////////////////////////////////////////////////////////////////////////////
             ///////////////////////////////// reading label value from img_seg //////////////////////////////
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
-            float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
-            // Vec3b label_cost = img_seg.at<Vec3b>(uv.y, uv.x);
+            // float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
+            Vec3b label_cost_rgb = img_seg.at<Vec3b>(uv.y, uv.x);
+            float label_cost = (label_cost_rgb.val[0] + label_cost_rgb.val[1] + label_cost_rgb.val[2])/3;
 
             // compute index on the map
             point_base.x     += map_width/2;
@@ -331,22 +339,22 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 /////////////////////////////////////////////////////////////////////////////////////////////////
 
                 // cout << "label value: " << label_cost << endl;
-                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2), -1);  
+                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost), -1);  
 
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
                 // map_label.at<Vec3b>(row, col) = label_cost;
-                ground_cloud.points[i].r = label_cost * 100;
-                ground_cloud.points[i].g = label_cost * 100;
-                ground_cloud.points[i].b = label_cost * 100;
+                ground_cloud.points[i].r = label_cost ;
+                ground_cloud.points[i].g = label_cost ;
+                ground_cloud.points[i].b = label_cost ;
             }    
 
         }
     } 
 
-   // imshow("map_label", map_label);
+//    imshow("map_label", map_label);
 
-   // waitKey(50);
+//    waitKey(50);
 
     cout << "projection finished" << endl;
     // ground_cloud_camera.header.frame_id = camera_frame;
