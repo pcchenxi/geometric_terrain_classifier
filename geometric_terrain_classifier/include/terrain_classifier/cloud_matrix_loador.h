@@ -676,7 +676,8 @@ Mat Cloud_Matrix_Loador::get_features(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_
 
     resize(height_diff,   output_height_diff_, Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
     resize(slope_map_l_,  output_slope_,       Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
-    resize(roughness_mat, output_roughness_,   Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    // resize(roughness_mat, output_roughness_,   Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
+    resize(cost_map,      output_roughness_,   Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
     resize(mean_height,   output_height_,      Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
     resize(cost_map,      output_cost_,        Size(map_rows_output_, map_cols_output_), 0, 0, INTER_NEAREST);
 
