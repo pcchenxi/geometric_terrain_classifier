@@ -321,11 +321,11 @@ Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness, Mat 
                 max_roughness_ = cost;
 
         
-            if(height_diff > 0.25)
+            if(height_diff > 0.25 || cost > 0.1)
             {
                 cost = 2.0;   // obstacle
             }    
-            else if(cost > 0.0015)
+            else if(cost > 0.001)
                 cost = 1.0;  // rough
             else 
                 cost = 0;  // flat
