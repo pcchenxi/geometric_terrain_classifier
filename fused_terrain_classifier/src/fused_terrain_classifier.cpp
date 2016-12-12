@@ -14,7 +14,7 @@ tf::TransformListener* tfListener = NULL;
 sensor_msgs::PointCloud2 cloud_recieved_map_;
 Cloud_Matrix_Loador* cml;
 
-ros::Publisher  pub_cloud, pub_costmap1, pub_costmap2, pub_costmap3;
+ros::Publisher  pub_cloud_geo, pub_cloud_lab, pub_costmap1, pub_costmap2, pub_costmap3;
 
 
 pcl::PointCloud<pcl::PointXYZRGB> ground_cloud1_, ground_cloud2_, ground_cloud3_;
@@ -235,7 +235,7 @@ bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageCo
 Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
-    string camera_frame = "kinect2_rgb_optical_frame_tune";
+    string camera_frame = "kinect2_rgb_optical_frame";
     // string camera_frame = image_msg->header.frame_id;
     pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
 
@@ -253,8 +253,8 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         /////////////////////////////////  convert and scale the image //////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
-        Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
-        // Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "bgr8")->image;
+         Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
+        //Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "bgr8")->image;
         resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
 
         // cout << "image raw: " << img_seg_raw.rows << " " << img_seg_raw.cols << endl;
@@ -276,7 +276,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
        // tfListener->lookupTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, to_base);
        // pcl_ros::transformAsMatrix (to_base, eigen_transform_tobase);
        // pcl::transformPointCloud (ground_cloud, ground_cloud_base, eigen_transform_tobase);
-		for(int i = 0; i < ground_cloud.points.size(); i++)
+		for(size_t i = 0; i < ground_cloud.points.size(); i++)
 		{
             pcl::PointXYZRGB point = ground_cloud.points[i];
             point.x -= robot_x_;
@@ -292,7 +292,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
     cout << "ready for point projection " << camera_frame << " " << ground_cloud.header.frame_id << endl;
     // project points to image
-    for(int i = 0; i < ground_cloud_camera.points.size(); i++)
+    for(size_t i = 0; i < ground_cloud_camera.points.size(); i++)
     {
         pcl::PointXYZRGB point_camera = ground_cloud_camera.points[i];
         pcl::PointXYZRGB point_base   = ground_cloud_base.points[i];
@@ -319,8 +319,8 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
             float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
-            // Vec3b label_cost_rgb = img_seg.at<Vec3b>(uv.y, uv.x);
-            // float label_cost = (label_cost_rgb.val[0] + label_cost_rgb.val[1] + label_cost_rgb.val[2])/3;
+           // Vec3b label_cost_rgb = img_seg.at<Vec3b>(uv.y, uv.x);
+           // float label_cost = (label_cost_rgb.val[0] + label_cost_rgb.val[1] + label_cost_rgb.val[2])/3;
 
             // compute index on the map
             point_base.x     += map_width/2;
@@ -343,9 +343,9 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
                 // map_label.at<Vec3b>(row, col) = label_cost;
-                // ground_cloud.points[i].r = label_cost * 100;
-                // ground_cloud.points[i].g = label_cost * 100;
-                // ground_cloud.points[i].b = label_cost * 100;
+                ground_cloud.points[i].r = label_cost * 100;
+                ground_cloud.points[i].g = label_cost * 100;
+                ground_cloud.points[i].b = label_cost * 100;
             }    
 
         }
@@ -389,6 +389,8 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
     if(!process_cloud(cloud_recieved_map_, image_msg))
         return; 
 
+	publish(pub_cloud_geo, ground_cloud1_);
+	
     cout << "in image call back" << endl;
     Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.05);
 
@@ -409,7 +411,7 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
         }
     }
 
-    publish(pub_cloud, ground_cloud1_);
+    publish(pub_cloud_lab, ground_cloud1_);
     pub_costmap1.publish(cost_map1_);
     // pub_costmap2.publish(cost_map2_);
     // pub_costmap3.publish(cost_map3_);
@@ -436,7 +438,8 @@ int main(int argc, char** argv)
     // ros::Subscriber sub_image_seg = node.subscribe<sensor_msgs::Image>("/image_seg", 1, imageCallback_seg);
 
     // ros::Subscriber sub_velodyne_left  = node.subscribe<sensor_msgs::PointCloud2>("/ndt_map", 1, callback_cloud);
-    pub_cloud      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered", 1);
+    pub_cloud_geo      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_geometric", 1);
+	pub_cloud_lab      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_label", 1);
 
     pub_costmap1 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map1", 1);
     pub_costmap2 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map2", 1);

@@ -10,7 +10,8 @@
      <param name="image_transport" value="compressed" />
 
      <remap from="/points_raw" to="/mapping_nodelet/pointcloud" />
-     <remap from="/image_seg/compressed" to="/image/label_output/compressed" />
+    <remap from="/image_seg/compressed" to="/image/label_output/compressed" /> 
+  <!--    <remap from="/image_seg/compressed" to="/image/color_output/compressed" />-->
    <!--   <remap from="/image_seg" to="/kinect2/hd/image_color" />  -->
 
   </node>

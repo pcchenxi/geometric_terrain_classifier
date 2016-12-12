@@ -222,7 +222,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         int row     = point.y / map_resolution_;
         col         = map_cols_ - col;
 
-        int hit     = point.z / map_h_resolution_;
+        // int hit     = point.z / map_h_resolution_;
         // if(hit >= map_hs_ || row >= map_rows_ || col >= map_cols_ || hit < 0 || row < 0 || col < 0)
         //     continue;
 
@@ -357,7 +357,7 @@ void Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float
     for(size_t i = 0; i < cloud.points.size(); i=i+1)
     {
         pcl::PointXYZ point = cloud.points[i];
-        if(point.z > 1.0 || (abs(point.x) < 1.0 && abs(point.y < 1.0)))
+        if(point.z > 5.0 || (abs(point.x) < 1.0 && abs(point.y < 1.0)))
             continue;
 
         point.x     += map_width_/2;
@@ -398,7 +398,7 @@ void Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float
 pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::process_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, 
                         float map_width, float map_broad, float map_height, float map_resolution, float map_h_resolution, float robot_x, float robot_y)
 {
-	for(int i = 0; i < cloud.points.size(); i++)
+	for(size_t i = 0; i < cloud.points.size(); i++)
 	{
 		cloud.points[i].x -= robot_x;
 		cloud.points[i].y -= robot_y;
@@ -426,7 +426,7 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::process_cloud(pcl::PointC
     ros::Time t5 = ros::Time::now();
     cout << t5 - t4 << " ------------------finished reformCloud: "  << cloud_color.points.size() << endl;
 
-	for(int i = 0; i < cloud_color.points.size(); i++)
+	for(size_t i = 0; i < cloud_color.points.size(); i++)
 	{
 		cloud_color.points[i].x += robot_x;
 		cloud_color.points[i].y += robot_y;
@@ -475,8 +475,8 @@ float Cloud_Matrix_Loador::get_vertical_mean_height(const float* h_ptr, int h)
 {
     int sum = 0;
     int count = 0;
-    int max_num = 0;
-    int max_h = 0;
+    // int max_num = 0;
+    // int max_h = 0;
     int mean_step = GROUND_ACCURACY / map_h_resolution_;
 
     int start_index = h + mean_step;
@@ -631,7 +631,7 @@ Mat Cloud_Matrix_Loador::fill_missingvalue(Mat img)
     morphologyEx(img, height_map_close, MORPH_DILATE, element);
 
     Mat mean_mat = get_feature_meanh(height_map_close, 3);
-    missing_v_mat = get_feature_meanh(mean_mat, 11); 
+    missing_v_mat = get_feature_meanh(mean_mat, 7); 
 
     threshold( mean_mat, missing_v_mask, 0, 1, THRESH_BINARY_INV );
     multiply(missing_v_mat, missing_v_mask, temp);
