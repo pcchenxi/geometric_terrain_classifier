@@ -233,56 +233,56 @@ pcl::PointCloud<pcl::PointXYZRGB> Cloud_Matrix_Loador::reformCloud(pcl::PointClo
         //     cost = max;
         // cloud_color.points[i].r = 255/max * cost; 
 
-        float cost_obs = 3;
-        float cost_rough = 2;
-        float cost_flat = 1;
+        float cost_obs = 2;
+        float cost_rough = 1;
+        float cost_flat = 0;
   
         if(cost == cost_obs)
         {
             cloud_color.points[i].r = 200;
         }    
-        // else if(cost == cost_rough)
-        // {
-        //     cloud_color.points[i].r = 100.0;
-        //     cloud_color.points[i].g = 255.0;process_cloud
-        //     cloud_color.points[i].b = 0.0;
-        // }   
-        // else if(cost == cost_flat)
-        // {
-        //     cloud_color.points[i].r = 0.0;
-        //     cloud_color.points[i].g = 0.0;
-        //     cloud_color.points[i].b = 255.0;
-        // }  
-        // else if(cost == -1)
-        // {
-        //     cloud_color.points[i].r = 0.0;process_cloud
-        //     cloud_color.points[i].g = 255.0;
-        //     cloud_color.points[i].b = 255.0;
-        // }
-        else  // for testing cost values
+        else if(cost == cost_rough)
         {
-            float theshold_1 = 0.01;
-            float theshold_2 = 0.2;
-
-            if(cost < theshold_1)
-            {
-                cloud_color.points[i].r = 0.0;
-                cloud_color.points[i].g = 255.0/theshold_1 * cost;
-                cloud_color.points[i].b = 0.0; 
-            }
-            else if(cost < theshold_2)
-            {
-                cloud_color.points[i].r = 255.0/theshold_2 * cost;
-                cloud_color.points[i].g = 255.0;
-                cloud_color.points[i].b = 0.0; 
-            }
-            else
-            {
-                cloud_color.points[i].r = 255.0;
-                cloud_color.points[i].g = 255.0;
-                cloud_color.points[i].b = 255.0 * cost; 
-            }
+            cloud_color.points[i].r = 100.0;
+            cloud_color.points[i].g = 255.0;
+            cloud_color.points[i].b = 0.0;
+        }   
+        else if(cost == cost_flat)
+        {
+            cloud_color.points[i].r = 0.0;
+            cloud_color.points[i].g = 0.0;
+            cloud_color.points[i].b = 255.0;
+        }  
+        else if(cost == -1)
+        {
+            cloud_color.points[i].r = 0.0;
+            cloud_color.points[i].g = 255.0;
+            cloud_color.points[i].b = 255.0;
         }
+        // else  // for testing cost values
+        // {
+        //     float theshold_1 = 0.01;
+        //     float theshold_2 = 0.2;
+
+        //     if(cost < theshold_1)
+        //     {
+        //         cloud_color.points[i].r = 0.0;
+        //         cloud_color.points[i].g = 255.0/theshold_1 * cost;
+        //         cloud_color.points[i].b = 0.0; 
+        //     }
+        //     else if(cost < theshold_2)
+        //     {
+        //         cloud_color.points[i].r = 255.0/theshold_2 * cost;
+        //         cloud_color.points[i].g = 255.0;
+        //         cloud_color.points[i].b = 0.0; 
+        //     }
+        //     else
+        //     {
+        //         cloud_color.points[i].r = 255.0;
+        //         cloud_color.points[i].g = 255.0;
+        //         cloud_color.points[i].b = 255.0 * cost; 
+        //     }
+        // }
     }
 
     return cloud_color;
@@ -323,12 +323,12 @@ Mat Cloud_Matrix_Loador::compute_cost(Mat h_diff, Mat slope, Mat roughness, Mat 
         
             if(height_diff > 0.25)
             {
-                cost = 3.0;   // obstacle
+                cost = 2.0;   // obstacle
             }    
-            // else if(cost > 0.03)
-            //     cost = 2.0;  // rough
+            else if(cost > 0.0015)
+                cost = 1.0;  // rough
             else 
-                cost = cost;  // flat
+                cost = 0;  // flat
 
             cost_map.at<float>(row, col) = cost;
 
@@ -357,7 +357,7 @@ void Cloud_Matrix_Loador::load_cloud(pcl::PointCloud<pcl::PointXYZ> cloud, float
     for(size_t i = 0; i < cloud.points.size(); i=i+1)
     {
         pcl::PointXYZ point = cloud.points[i];
-        if(point.z > 1.0)
+        if(point.z > 1.0 || (abs(point.x) < 1.0 && abs(point.y < 1.0)))
             continue;
 
         point.x     += map_width_/2;
@@ -561,6 +561,7 @@ void Cloud_Matrix_Loador::get_feature_slope_bycloud(pcl::PointCloud<pcl::PointXY
     float smaller_r = map_resolution_ * 4;
     if(smaller_r < 0.10)
         smaller_r = 0.10;
+    // float larger_r =  smaller_r * 3;
 
     // normal_large = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, larger_r);
     normal_small = calculateSurfaceNormal(cloud_ground_prt, cloud_all_prt, smaller_r);
