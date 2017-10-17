@@ -7,26 +7,26 @@
 #include <pcl_ros/transforms.h>
 
 #include <centauro_costmap/CostMap.h>
-#include <terrain_classifier/cloud_matrix_loador.h>
-
+#include <fused_terrain_classifier/cloud_matrix_loador.h>
 
 tf::TransformListener* tfListener = NULL;
-sensor_msgs::PointCloud2 cloud_recieved_map_;
+pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_;
 Cloud_Matrix_Loador* cml;
 
-ros::Publisher  pub_cloud_geo, pub_cloud_lab, pub_costmap1, pub_costmap2, pub_costmap3;
+ros::Publisher  pub_cloud_geo, pub_cloud_lab, pub_costmap;
+image_transport::Publisher pub_geometric_features;
 
-
-pcl::PointCloud<pcl::PointXYZRGB> ground_cloud1_, ground_cloud2_, ground_cloud3_;
-centauro_costmap::CostMap cost_map1_, cost_map2_, cost_map3_;
+centauro_costmap::CostMap cost_map_;
 
 float robot_x_, robot_y_;
 
-string map_frame = "map";
+string center_frame = "ego_rot";
+string world_frame = "map";
+string map_frame = world_frame;
 string output_frame = "base_link_oriented";
-string process_frame = "map";
+string process_frame = world_frame;
 
-bool initialized = false;
+bool _ready_to_start = true;
 
 void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZ> cloud, int type = 2)
 {
@@ -56,6 +56,26 @@ void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZRGB> cloud, int ty
     pub.publish(pointlcoud2);
 }
 
+pcl::PointCloud<pcl::PointXYZ> transform_cloud(pcl::PointCloud<pcl::PointXYZ> cloud_in, sensor_msgs::PointCloud2 message_in, string frame_target)
+{
+    ////////////////////////////////// transform ////////////////////////////////////////
+    pcl::PointCloud<pcl::PointXYZ> cloud_out;
+    tf::StampedTransform to_target;
+    try 
+    {
+        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, message_in.header.stamp, to_target);
+    }
+    catch (tf::TransformException& ex) 
+    {
+        ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
+        // return cloud_in;
+    }
+
+    pcl_ros::transformPointCloud (cloud_in,cloud_out,to_target);  
+    cloud_out.header.frame_id = frame_target;
+    return cloud_out;
+}
+
 sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, string frame_target, ros::Time stamp)
 {
     ////////////////////////////////// transform ////////////////////////////////////////
@@ -83,6 +103,58 @@ sensor_msgs::PointCloud2 transform_cloud(sensor_msgs::PointCloud2 cloud_in, stri
 
     cloud_out.header.frame_id = frame_target;
     return cloud_out;
+}
+
+pcl::PointCloud<pcl::PointXYZ> remove_cloud_outside_imgfov(pcl::PointCloud<pcl::PointXYZ> cloud_camera)
+{
+    pcl::PointCloud<pcl::PointXYZ> cloud_filtered;
+
+    for(size_t i = 0; i < cloud_camera.points.size(); i++)
+    {
+        pcl::PointXYZ point_camera = cloud_camera.points[i];
+        if(point_camera.z < 1.0)
+            continue;
+
+        cv::Point2d uv;
+        cv::Point3d pt_cv(point_camera.x, point_camera.y, point_camera.z);
+        uv = project3D_to_image(pt_cv);
+      
+        if(uv.x >= 0 && uv.x < 1920 && uv.y >= 0 && uv.y < 1080)
+        {
+            cloud_filtered.push_back(point_camera);
+        }
+    }
+
+    cloud_filtered.header.frame_id = cloud_camera.header.frame_id;
+    return cloud_filtered;
+}
+
+pcl::PointCloud<pcl::PointXYZ> cloud_filter(pcl::PointCloud<pcl::PointXYZ> cloud)
+{
+    pcl::PointCloud<pcl::PointXYZ>::Ptr  input_cloud       (new pcl::PointCloud<pcl::PointXYZ>(cloud));
+    pcl::PointCloud<pcl::PointXYZ>::Ptr  cloud_passthrough (new pcl::PointCloud<pcl::PointXYZ>);
+
+    cout << "before filter  " << input_cloud->points.size() << endl;
+
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud (input_cloud);
+    pass.setFilterFieldName ("x");
+    pass.setFilterLimits (-10, 10);
+    pass.filter (*cloud_passthrough);
+    // cout << "after x filter  " << cloud_passthrough->points.size() << endl;
+
+    pass.setInputCloud (cloud_passthrough);
+    pass.setFilterFieldName ("y");
+    pass.setFilterLimits (-10, 10);
+    pass.filter (*cloud_passthrough);
+    // cout << "after y filter  " << cloud_passthrough->points.size() << endl;
+
+    pass.setInputCloud (cloud_passthrough);
+    pass.setFilterFieldName ("z");
+    pass.setFilterLimits (-3, 3);
+    pass.filter (*cloud_passthrough);
+
+    return *cloud_passthrough;
 }
 
 void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat cost, float resoluation, centauro_costmap::CostMap &cost_map, float robot_x, float robot_y)
@@ -134,103 +206,11 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
 
 void set_output_frame(string output_frame, ros::Time stamp)
 {
-    cost_map1_.header.frame_id = output_frame;
-    cost_map2_.header.frame_id = output_frame;
-    cost_map3_.header.frame_id = output_frame;
-    cost_map1_.header.stamp = stamp;
-    cost_map2_.header.stamp = stamp;
-    cost_map3_.header.stamp = stamp; 
+    cost_map_.header.frame_id = output_frame;
+    cost_map_.header.stamp = stamp;
 
-    // ground_cloud1_.header.frame_id = output_frame;
-    // ground_cloud2_.header.frame_id = output_frame;
-    // ground_cloud3_.header.frame_id = output_frame;
+    // ground_cloud_.header.frame_id = output_frame;
 }
-
-
-bool process_cloud(sensor_msgs::PointCloud2 cloud_in, const sensor_msgs::ImageConstPtr& image_msg)
-{
-    cout << "cloud recieved: " << ros::Time::now() << endl;
-    sensor_msgs::PointCloud2 cloud_transformed = transform_cloud(cloud_in, process_frame, image_msg->header.stamp);
-    if(cloud_transformed.height == 0 && cloud_transformed.width == 0)
-        return 0;
-
-    pcl::PointCloud<pcl::PointXYZ> pcl_cloud;
-    pcl::fromROSMsg(cloud_transformed, pcl_cloud);
-
-    ros::Time begin = ros::Time::now();
-
-    // save transform to world
-    tf::StampedTransform to_target;
-    try 
-    {
-        tfListener->lookupTransform("map", "ego_rot", image_msg->header.stamp, to_target);
-    }
-    catch (tf::TransformException& ex) 
-    {
-        ROS_WARN("TF exception:\n%s", ex.what());
-        return 0;
-    }
-
-    // process cloud
-
-    robot_x_ = to_target.getOrigin().x();
-    robot_y_ = to_target.getOrigin().y();
-
-    ground_cloud1_ = cml->process_cloud(pcl_cloud, 12, 12, 6, 0.05, 0.015, robot_x_, robot_y_);
-    ground_cloud1_.header.frame_id = process_frame;
-    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.05, cost_map1_, robot_x_, robot_y_);
-
-    // ground_cloud2_ = cml->process_cloud(pcl_cloud, 5, 5, 6, 0.01, 0.015);
-    // ground_cloud2_.header.frame_id = process_frame;
-    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.05, cost_map2_, robot_x_, robot_y_);
-
-
-    // ground_cloud3_ = cml->process_cloud(pcl_cloud, 30, 30, 6, 1.0, 0.015);
-    // ground_cloud3_.header.frame_id = process_frame;
-    // convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 1.0, cost_map3_, robot_x_, robot_y_);
-
-    cout << "robot position : " << robot_x_ << " " << robot_y_ << endl;
-
-    // transform point back to map frame
-    //Eigen::Matrix4f eigen_transform;
-    //pcl_ros::transformAsMatrix (to_target, eigen_transform);
-    //pcl::transformPointCloud (ground_cloud1_, ground_cloud1_, eigen_transform);
-    //pcl::transformPointCloud (ground_cloud2_, ground_cloud2_, eigen_transform);
-    //pcl::transformPointCloud (ground_cloud3_, ground_cloud3_, eigen_transform);
-
-    set_output_frame(output_frame, image_msg->header.stamp);
-
-    cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
-
-    return 1;
-    // publish(pub_cloud, ground_cloud2_); // publishing colored points with defalt cost function
-
-    // pub_costmap1.publish(cost_map1);
-    // pub_costmap2.publish(cost_map2);
-    // pub_costmap3.publish(cost_map3);    
-}
-
-  cv::Point2d project3D_to_image(cv::Point3d& xyz, string frame_id )
-  {
-    double fx, fy, cx, cy; 
-    
-    //   fx = 529.9732789120519;
-    //   fy = 526.9663404399863;
-    //   cx = 477.4416333879422;
-    //   cy = 261.8692914553029;
-	
-    fx = 1090.0084356403304;
-    fy = 1093.4799569173076;
-    cx = 944.9003536394688;
-    cy = 527.4736145938574;
-
-    cv::Point2d uv_rect;
-    uv_rect.x = (fx*xyz.x) / xyz.z + cx;
-    uv_rect.y = (fy*xyz.y) / xyz.z + cy;
-
-    // cout << "projected uv: "<< xyz.x << " " << xyz.y << endl;
-    return uv_rect;
-  }
 
 Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
 {
@@ -255,12 +235,12 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
          Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
         //Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "bgr8")->image;
-        resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
+        // resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
 
         // cout << "image raw: " << img_seg_raw.rows << " " << img_seg_raw.cols << endl;
-       // imshow("img_seg", img_seg*100);
-       // waitKey(50);
-       cout << "converted image" << endl;
+        imshow("img_seg", img_seg);
+        waitKey(0);
+        cout << "converted image" << endl;
 
         tf::StampedTransform to_camera;
         Eigen::Matrix4f eigen_transform_tocamera;
@@ -303,7 +283,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
         cv::Point2d uv;
         cv::Point3d pt_cv(point_camera.x, point_camera.y, point_camera.z);
-        uv = project3D_to_image(pt_cv, camera_frame);
+        uv = project3D_to_image(pt_cv);
       
         // cout << "camera: " << point_camera.x << " " << point_camera.y << " " << point_camera.z << endl;
         // cout << "base: " << point_base.x << " " << point_base.y << " " << point_base.z << endl;
@@ -363,36 +343,70 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
 
 void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 {
-    cout << "cloud in " << endl;
-    cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, cloud_in->header.stamp);
-    if(cloud_recieved_map_.height == 0 && cloud_recieved_map_.width == 0)
-        initialized = false;
-    else
-        initialized = true;
-    // cloud_recieved_map_ = transform_cloud(*cloud_in, map_frame, ros::Time(0));
-    // cout << "points number:  " << cloud_recieved_map_.points.size() << endl;
+    if (_ready_to_start == false)
+        return;
 
+    cout << "cloud in" << endl;
+    if(cloud_in->height == 0 && cloud_in->width == 0)
+        return;
+
+    // convert message cloud to pcl cloud 
+    pcl::PointCloud<pcl::PointXYZ> pcl_cloud_in, pcl_cloud_camera;
+    pcl::fromROSMsg(*cloud_in, pcl_cloud_in);
+
+    cout << "cloud recieved: " << ros::Time::now() << endl;
+
+    // transfer cloud to comera frame and filter out the point outside of the image fov
+    pcl::PointCloud<pcl::PointXYZ> cloud_base = transform_cloud(pcl_cloud_in, *cloud_in, "base_link");    
+    pcl::PointCloud<pcl::PointXYZ> cloud_base_filtered = cloud_filter(cloud_base);
+
+    pcl::PointCloud<pcl::PointXYZ> cloud_camera = transform_cloud(cloud_base_filtered, *cloud_in, "kinect2_rgb_optical_frame");
+    pcl::PointCloud<pcl::PointXYZ> cloud_camera_filtered = remove_cloud_outside_imgfov(cloud_camera);
+    pcl::PointCloud<pcl::PointXYZ> cloud_process_filtered = transform_cloud(cloud_camera_filtered, *cloud_in, process_frame);
+    cout << "point number: " << cloud_process_filtered.points.size() << endl;
+    ros::Time begin = ros::Time::now();
+
+    // save transform to world
+    tf::StampedTransform to_target;
+    try 
+    {
+        tfListener->lookupTransform(world_frame, center_frame, cloud_in->header.stamp, to_target);
+    }
+    catch (tf::TransformException& ex) 
+    {
+        ROS_WARN("TF exception:\n%s", ex.what());
+        return;
+    }
+
+    // process cloud
+
+    robot_x_ = to_target.getOrigin().x();
+    robot_y_ = to_target.getOrigin().y();
+
+    ground_cloud_ = cml->process_cloud(cloud_process_filtered, 30, 30, 6, 0.1, 0.1, robot_x_, robot_y_);
+    ground_cloud_.header.frame_id = process_frame;
+    convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.1, cost_map_, robot_x_, robot_y_);
+
+    cout << "robot position : " << robot_x_ << " " << robot_y_ << endl;
+
+    // publish geometric feature for fusing
+    Mat features = cml->generate_features_image(cloud_process_filtered, cloud_camera_filtered);
+    sensor_msgs::ImagePtr img_features    = cv_bridge::CvImage(std_msgs::Header(), "32FC4", features).toImageMsg();
+    pub_geometric_features.publish(img_features);
+
+    set_output_frame(output_frame, cloud_in->header.stamp);
+
+    cout << ros::Time::now() - begin << "  loaded cloud *********************" << endl;
+
+    publish(pub_cloud_geo, ground_cloud_);
+
+    _ready_to_start = false;
 }
 
 void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
 {
-    cout << "compressed image" << endl;
-    // Mat img_comp = cv_bridge::toCvShare(image_msg, "bgr8")->image;
-    // resize(img_comp, img_comp, Size(1920, 1080), 0, 0, INTER_NEAREST);
-    // imshow("compressed_img", img_comp);
-    // waitKey(50);
-    // return;
-
-    if(!initialized)
-        return; 
-
-    if(!process_cloud(cloud_recieved_map_, image_msg))
-        return; 
-
-	publish(pub_cloud_geo, ground_cloud1_);
-	
     cout << "in image call back" << endl;
-    Mat label_map = image_cloud_mapper(image_msg, ground_cloud1_, 12, 12, 0.05);
+    Mat label_map = image_cloud_mapper(image_msg, ground_cloud_, 12, 12, 0.05);
 
     // cout << "map: " << cost_map1_.cells_x << " " << cost_map1_.cells_y << endl;
     // cout << "image:  " << label_map.cols << " " << label_map.rows << endl;
@@ -405,19 +419,20 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
             int index = row * label_map.rows + col;
 
             if(semantic_v == -1)
-                cost_map1_.semantic_cost[index] = std::numeric_limits<float>::quiet_NaN();
+                cost_map_.semantic_cost[index] = std::numeric_limits<float>::quiet_NaN();
             else
-                cost_map1_.semantic_cost[index] = semantic_v;
+                cost_map_.semantic_cost[index] = semantic_v;
         }
     }
 
-    publish(pub_cloud_lab, ground_cloud1_);
-    pub_costmap1.publish(cost_map1_);
+    publish(pub_cloud_lab, ground_cloud_);
+    pub_costmap.publish(cost_map_);
     // pub_costmap2.publish(cost_map2_);
     // pub_costmap3.publish(cost_map3_);
 
     // imshow("label_map", label_map);
     // waitKey(20);
+    _ready_to_start = true;
 }
 
 int main(int argc, char** argv)
@@ -433,7 +448,7 @@ int main(int argc, char** argv)
     ros::Subscriber sub_cloud     = node.subscribe<sensor_msgs::PointCloud2>("/points_raw", 1, callback_cloud);
 
     image_transport::ImageTransport it(node);
-    image_transport::Subscriber sub_raw = it.subscribe("/image_seg", 1, imageCallback_seg);
+    image_transport::Subscriber sub_raw = it.subscribe("/final_segmentation", 1, imageCallback_seg);
 
     // ros::Subscriber sub_image_seg = node.subscribe<sensor_msgs::Image>("/image_seg", 1, imageCallback_seg);
 
@@ -441,10 +456,8 @@ int main(int argc, char** argv)
     pub_cloud_geo      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_geometric", 1);
 	pub_cloud_lab      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_label", 1);
 
-    pub_costmap1 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map1", 1);
-    pub_costmap2 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map2", 1);
-    pub_costmap3 = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map3", 1);
-
+    pub_costmap = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map", 1);
+    pub_geometric_features         = it.advertise("/gemoetric_features", 1);
     ros::spin();
 
     return 0;
