@@ -1,0 +1,12 @@
+<package format="2">
+	<name>centauro_locomotion_msgs</name>
+	<description>ROS message and action definition for CENTAURO locomotion</description>
+	<version>0.0.1</version>
+	<license>BSD</license>
+	<maintainer email="klamt@ais.uni-bonn.de">Tobias Klamt</maintainer>
+	<buildtool_depend>catkin</buildtool_depend>
+	<build_depend>message_generation</build_depend>
+	<depend>actionlib</depend>
+	<depend>actionlib_msgs</depend>
+	<depend>message_runtime</depend>
+</package>

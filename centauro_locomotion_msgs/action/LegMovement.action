@@ -1,0 +1,29 @@
+# ROS Action which defines endeffector positions for all four legs in cartesian space
+# relative to the robot base center. (fl = front left, br = back right ...). Each wheel is oriented forward and is perpendicular
+# to the ground. The bool flag "wheel_rotation_enabled" describes if the wheel is free to rotate or if wheel rotation is inhibited.
+# The result is an empty message but has to be sent to signalize that the desired configuration is reached.
+
+# Goal: longitudinal wheel coordinate
+float32 goal_pos_fl_x
+float32 goal_pos_fl_y
+float32 goal_pos_fl_z
+bool wheel_rotation_enabled_fl
+
+float32 goal_pos_bl_x
+float32 goal_pos_bl_y
+float32 goal_pos_bl_z
+bool wheel_rotation_enabled_bl
+
+float32 goal_pos_br_x
+float32 goal_pos_br_y
+float32 goal_pos_br_z
+bool wheel_rotation_enabled_br
+
+float32 goal_pos_fr_x
+float32 goal_pos_fr_y
+float32 goal_pos_fr_z
+bool wheel_rotation_enabled_fr
+
+---
+# Result:
+---

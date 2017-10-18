@@ -32,6 +32,7 @@ from class_mean_iou import class_mean_iou
 
 feature_vision = np.zeros( [1, 256, 512, 34], dtype=np.float32 )
 seg_pub = []
+label_pub = []
 prediction_label = []
 bridge = CvBridge()
 clf = RandomForestClassifier(max_depth=10, n_estimators=5)
@@ -74,6 +75,9 @@ def callback_prediction(message):
 
 #     pickle.dump(prediction_prob, open("/home/xi/workspace/labels/prob.p", "wb"))
     prediction_label = colorize(prediction_label, cityscapes.augmented_labels)
+    image_message = bridge.cv2_to_imgmsg(prediction_label)
+    label_pub.publish(image_message)
+
     # cv2.imshow("prediction_label", prediction_label)
     # cv2.waitKey(10)
 
@@ -165,11 +169,12 @@ def classify_feature(feature_img):
         label = predict[i]
         row = rows[i]
         col = cols[i]
-        radius = 15.0/540.0 * row
-        img_predit[row, col] = label*50
-        cv2.circle(img_predit, (col, row), int(radius), label*50, -1)
+        radius = 10.0/540.0 * row
+        img_predit[row, col] = label
+        cv2.circle(img_predit, (col, row), int(radius), label, -1)
 
-    image_message = bridge.cv2_to_imgmsg(img_predit, encoding='8UC1')
+    img_color = cv2.cvtColor(img_predit, cv2.COLOR_GRAY2RGB)
+    image_message = bridge.cv2_to_imgmsg(img_color, "bgr8")
     seg_pub.publish(image_message)
 
 def callback(data):
@@ -190,12 +195,14 @@ def get_classifier():
     print (feature_norms)
 
 def main(args):
-    global seg_pub
+    global seg_pub, label_pub
     rospy.init_node('terrain_classifier', anonymous=True)
     image_sub = rospy.Subscriber("/gemoetric_features", Image, callback)
     subscriber = rospy.Subscriber('/kinect2/hd/image_color_rect/compressed', CompressedImage, callback=callback_prediction, queue_size=1, buff_size=52428800 * 2)
 
     seg_pub = rospy.Publisher('final_segmentation', Image, queue_size=1)
+    label_pub = rospy.Publisher('label_segmentation', Image, queue_size=1)
+
 
     get_classifier()
     rospy.spin()

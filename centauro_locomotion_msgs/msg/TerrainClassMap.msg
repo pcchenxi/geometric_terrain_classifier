@@ -20,4 +20,4 @@ float32 resolution
 
 # Height values per cell (row step: cells_x)
 uint32[] terrain_class
-
+ 

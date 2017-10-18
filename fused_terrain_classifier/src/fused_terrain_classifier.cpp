@@ -6,17 +6,17 @@
 #include <image_transport/image_transport.h>
 #include <pcl_ros/transforms.h>
 
-#include <centauro_costmap/CostMap.h>
+#include <centauro_locomotion_msgs/TerrainClassMap.h>
 #include <fused_terrain_classifier/cloud_matrix_loador.h>
 
 tf::TransformListener* tfListener = NULL;
-pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_;
+pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_, ground_cloud_camera_;
 Cloud_Matrix_Loador* cml;
 
 ros::Publisher  pub_cloud_geo, pub_cloud_lab, pub_costmap;
 image_transport::Publisher pub_geometric_features;
 
-centauro_costmap::CostMap cost_map_;
+centauro_locomotion_msgs::TerrainClassMap cost_map_;
 
 float robot_x_, robot_y_;
 
@@ -54,6 +54,26 @@ void publish(ros::Publisher pub, pcl::PointCloud<pcl::PointXYZRGB> cloud, int ty
     pcl::toROSMsg(cloud, pointlcoud2);
 
     pub.publish(pointlcoud2);
+}
+
+pcl::PointCloud<pcl::PointXYZRGB> transform_cloud(pcl::PointCloud<pcl::PointXYZRGB> cloud_in, sensor_msgs::PointCloud2 message_in, string frame_target)
+{
+    ////////////////////////////////// transform ////////////////////////////////////////
+    pcl::PointCloud<pcl::PointXYZRGB> cloud_out;
+    tf::StampedTransform to_target;
+    try 
+    {
+        tfListener->lookupTransform(frame_target, cloud_in.header.frame_id, message_in.header.stamp, to_target);
+    }
+    catch (tf::TransformException& ex) 
+    {
+        ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
+        // return cloud_in;
+    }
+
+    pcl_ros::transformPointCloud (cloud_in,cloud_out,to_target);  
+    cloud_out.header.frame_id = frame_target;
+    return cloud_out;
 }
 
 pcl::PointCloud<pcl::PointXYZ> transform_cloud(pcl::PointCloud<pcl::PointXYZ> cloud_in, sensor_msgs::PointCloud2 message_in, string frame_target)
@@ -157,22 +177,22 @@ pcl::PointCloud<pcl::PointXYZ> cloud_filter(pcl::PointCloud<pcl::PointXYZ> cloud
     return *cloud_passthrough;
 }
 
-void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat cost, float resoluation, centauro_costmap::CostMap &cost_map, float robot_x, float robot_y)
+void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat cost, float resoluation, centauro_locomotion_msgs::TerrainClassMap &cost_map, float robot_x, float robot_y)
 {
-    cost_map.cells_x = h_diff.cols;
-    cost_map.cells_y = h_diff.rows;
+    cost_map.num_cells_x = h_diff.cols;
+    cost_map.num_cells_y = h_diff.rows;
     cost_map.resolution = resoluation;
 
-    cost_map.origin_x = robot_x - 0.5 * cost_map.cells_x * resoluation;
-    cost_map.origin_y = robot_y - 0.5 * cost_map.cells_y * resoluation;
+    cost_map.origin_x = robot_x - 0.5 * cost_map.num_cells_x * resoluation;
+    cost_map.origin_y = robot_y - 0.5 * cost_map.num_cells_y * resoluation;
 
-    cost_map.height.resize(cost_map.cells_x * cost_map.cells_y);
-    cost_map.height_diff.resize(cost_map.cells_x * cost_map.cells_y);
-    cost_map.slope.resize(cost_map.cells_x * cost_map.cells_y);
-    cost_map.roughness.resize(cost_map.cells_x * cost_map.cells_y);
-    cost_map.semantic_cost.resize(cost_map.cells_x * cost_map.cells_y);
+    // cost_map.height.resize(cost_map.num_cells_x * cost_map.num_cells_y);
+    // cost_map.height_diff.resize(cost_map.num_cells_x * cost_map.num_cells_y);
+    // cost_map.slope.resize(cost_map.num_cells_x * cost_map.num_cells_y);
+    // cost_map.roughness.resize(cost_map.num_cells_x * cost_map.num_cells_y);
+    cost_map.terrain_class.resize(cost_map.num_cells_x * cost_map.num_cells_y);
 
-    cout << "map size: " << cost_map.cells_x << " " << cost_map.cells_y << endl;
+    cout << "map size: " << cost_map.num_cells_x << " " << cost_map.num_cells_y << endl;
 
     for(int row = 0; row < h_diff.rows; row ++)
     {
@@ -186,20 +206,20 @@ void convert_to_costmap(Mat height, Mat h_diff, Mat slope, Mat roughness, Mat co
 
             int index = row * h_diff.rows + col;
 
-            if(cost_v == -1)
-            {
-                cost_map.height[index]       = std::numeric_limits<float>::quiet_NaN();;
-                cost_map.height_diff[index]  = std::numeric_limits<float>::quiet_NaN();;
-                cost_map.slope[index]        = std::numeric_limits<float>::quiet_NaN();;
-                cost_map.roughness[index]    = std::numeric_limits<float>::quiet_NaN();;
-            }
-            else
-            {
-                cost_map.height[index]       = height_v;
-                cost_map.height_diff[index]  = height_diff;
-                cost_map.slope[index]        = slope_v;
-                cost_map.roughness[index]    = roughness_v;
-            }
+            // if(cost_v == -1)
+            // {
+            //     cost_map.height[index]       = std::numeric_limits<float>::quiet_NaN();;
+            //     cost_map.height_diff[index]  = std::numeric_limits<float>::quiet_NaN();;
+            //     cost_map.slope[index]        = std::numeric_limits<float>::quiet_NaN();;
+            //     cost_map.roughness[index]    = std::numeric_limits<float>::quiet_NaN();;
+            // }
+            // else
+            // {
+            //     cost_map.height[index]       = height_v;
+            //     cost_map.height_diff[index]  = height_diff;
+            //     cost_map.slope[index]        = slope_v;
+            //     cost_map.roughness[index]    = roughness_v;
+            // }
         }
     }
 }
@@ -212,12 +232,14 @@ void set_output_frame(string output_frame, ros::Time stamp)
     // ground_cloud_.header.frame_id = output_frame;
 }
 
-Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud, float map_width, float map_broad, float map_resolution)
+Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCloud<pcl::PointXYZRGB> &ground_cloud
+                        , pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera
+                        , float map_width, float map_broad, float map_resolution)
 {
     // init output image and transform pointcloud to camera frame
     string camera_frame = "kinect2_rgb_optical_frame";
     // string camera_frame = image_msg->header.frame_id;
-    pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_camera, ground_cloud_base;
+    pcl::PointCloud<pcl::PointXYZRGB> ground_cloud_base;
 
     Mat img_seg;
     int img_rows = std::ceil(map_width/map_resolution);
@@ -233,29 +255,14 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         /////////////////////////////////  convert and scale the image //////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
-         Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "mono8")->image;
+        img_seg = cv_bridge::toCvShare(image_msg, "bgr8")->image;
         //Mat img_seg_raw = cv_bridge::toCvShare(image_msg, "bgr8")->image;
         // resize(img_seg_raw, img_seg, Size(1920, 1080), 0, 0, INTER_NEAREST);
 
-        // cout << "image raw: " << img_seg_raw.rows << " " << img_seg_raw.cols << endl;
-        imshow("img_seg", img_seg);
-        waitKey(0);
+        // cout << "image raw: " << img_seg.rows << " " << img_seg.cols << endl;
+        // imshow("img_seg", img_seg_raw);
+        // waitKey(0);
         cout << "converted image" << endl;
-
-        tf::StampedTransform to_camera;
-        Eigen::Matrix4f eigen_transform_tocamera;
-        tfListener->waitForTransform(camera_frame, ground_cloud.header.frame_id, image_msg->header.stamp, ros::Duration(0.15));
-        tfListener->lookupTransform(camera_frame, ground_cloud.header.frame_id, image_msg->header.stamp, to_camera);
-        pcl_ros::transformAsMatrix (to_camera, eigen_transform_tocamera);
-        pcl::transformPointCloud (ground_cloud, ground_cloud_camera, eigen_transform_tocamera);
-
-        cout << "transformed cloud to camera " << ground_cloud.points.size() << endl;
-       // tf::StampedTransform to_base;
-       // Eigen::Matrix4f eigen_transform_tobase;
-       // tfListener->waitForTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, ros::Duration(0.15));
-       // tfListener->lookupTransform(process_frame, ground_cloud.header.frame_id, image_msg->header.stamp, to_base);
-       // pcl_ros::transformAsMatrix (to_base, eigen_transform_tobase);
-       // pcl::transformPointCloud (ground_cloud, ground_cloud_base, eigen_transform_tobase);
 		for(size_t i = 0; i < ground_cloud.points.size(); i++)
 		{
             pcl::PointXYZRGB point = ground_cloud.points[i];
@@ -288,6 +295,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
         // cout << "camera: " << point_camera.x << " " << point_camera.y << " " << point_camera.z << endl;
         // cout << "base: " << point_base.x << " " << point_base.y << " " << point_base.z << endl;
         // cout << "projected uv: "<< uv.x << " " << uv.y << endl;
+        // cout << "image raw: " << img_seg.rows << " " << img_seg.cols << endl;
 
         // check is the projected point inside image range
         if(uv.x >= 100 && uv.x < img_seg.cols -100 && uv.y >= 100 && uv.y < img_seg.rows-100)
@@ -298,10 +306,9 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
             ///////////////////////////////// reading label value from img_seg //////////////////////////////
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
-            float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
-           // Vec3b label_cost_rgb = img_seg.at<Vec3b>(uv.y, uv.x);
-           // float label_cost = (label_cost_rgb.val[0] + label_cost_rgb.val[1] + label_cost_rgb.val[2])/3;
-
+            // float label_cost = (float)(img_seg.at<uchar>(uv.y, uv.x));
+            Vec3b label_cost_rgb = img_seg.at<Vec3b>(uv.y, uv.x);
+            float label_cost = (label_cost_rgb.val[0] + label_cost_rgb.val[1] + label_cost_rgb.val[2])/3;
             // compute index on the map
             point_base.x     += map_width/2;
             point_base.y     += map_broad/2;
@@ -318,7 +325,7 @@ Mat image_cloud_mapper(const sensor_msgs::ImageConstPtr& image_msg, pcl::PointCl
                 /////////////////////////////////////////////////////////////////////////////////////////////////
 
                 // cout << "label value: " << label_cost << endl;
-                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost/2), -1);  
+                cv::circle(map_label, Point(col, row), 3, Scalar(label_cost), -1);  
 
                 // cv::circle(map_label, Point(col, row), 3, Scalar(label_cost.val[0]), -1);  
                 // map_label.at<float>(col, row) = label_cost;
@@ -385,6 +392,8 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 
     ground_cloud_ = cml->process_cloud(cloud_process_filtered, 30, 30, 6, 0.1, 0.1, robot_x_, robot_y_);
     ground_cloud_.header.frame_id = process_frame;
+    ground_cloud_camera_ = transform_cloud(ground_cloud_, *cloud_in, "kinect2_rgb_optical_frame");
+
     convert_to_costmap(cml->output_height_, cml->output_height_diff_, cml->output_slope_, cml->output_roughness_, cml->output_cost_, 0.1, cost_map_, robot_x_, robot_y_);
 
     cout << "robot position : " << robot_x_ << " " << robot_y_ << endl;
@@ -406,7 +415,7 @@ void callback_cloud(const sensor_msgs::PointCloud2ConstPtr &cloud_in)
 void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
 {
     cout << "in image call back" << endl;
-    Mat label_map = image_cloud_mapper(image_msg, ground_cloud_, 12, 12, 0.05);
+    Mat label_map = image_cloud_mapper(image_msg, ground_cloud_, ground_cloud_camera_, 30, 30, 0.1);
 
     // cout << "map: " << cost_map1_.cells_x << " " << cost_map1_.cells_y << endl;
     // cout << "image:  " << label_map.cols << " " << label_map.rows << endl;
@@ -419,9 +428,12 @@ void imageCallback_seg(const sensor_msgs::ImageConstPtr& image_msg)
             int index = row * label_map.rows + col;
 
             if(semantic_v == -1)
-                cost_map_.semantic_cost[index] = std::numeric_limits<float>::quiet_NaN();
+                cost_map_.terrain_class[index] = std::numeric_limits<float>::quiet_NaN();
             else
-                cost_map_.semantic_cost[index] = semantic_v;
+            {
+                cost_map_.terrain_class[index] = semantic_v;
+                // cout << semantic_v << endl;
+            }    
         }
     }
 
@@ -456,7 +468,7 @@ int main(int argc, char** argv)
     pub_cloud_geo      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_geometric", 1);
 	pub_cloud_lab      = node.advertise<sensor_msgs::PointCloud2>("/cloud_filtered_label", 1);
 
-    pub_costmap = node.advertise<centauro_costmap::CostMap>("/terrain_classifier/map", 1);
+    pub_costmap = node.advertise<centauro_locomotion_msgs::TerrainClassMap>("/terrain_classifier/map", 1);
     pub_geometric_features         = it.advertise("/gemoetric_features", 1);
     ros::spin();
 
